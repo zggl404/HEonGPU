@@ -155,9 +155,9 @@ static double max_abs_diff(const std::vector<double>& a,
     return max_err;
 }
 
-static void compare_plain_sim(const std::string& label,
-                              const plainsim::PlainVec& plain,
-                              const Ctxt& c, int slots)
+static void compare_plain_sim_layer(const std::string& label,
+                                    const plainsim::PlainVec& plain,
+                                    const Ctxt& c, int slots)
 {
     std::vector<double> dec = controller.decrypt_tovector(c, slots);
     double max_err = max_abs_diff(plain, dec);
@@ -651,8 +651,8 @@ static void execute_resnet20()
         debug_decrypt("Initial layer out", firstLayer, 8);
     }
     if (compare_plain_sim) {
-        compare_plain_sim("Initial layer", plain_initial, firstLayer,
-                          plain_controller.num_slots);
+        compare_plain_sim_layer("Initial layer", plain_initial, firstLayer,
+                                plain_controller.num_slots);
     }
 
     auto startLayer = utils::start_time();
@@ -663,8 +663,8 @@ static void execute_resnet20()
         debug_decrypt("Layer 1 out", resLayer1, 8);
     }
     if (compare_plain_sim) {
-        compare_plain_sim("Layer 1", plain_layer1, resLayer1,
-                          plain_controller.num_slots);
+        compare_plain_sim_layer("Layer 1", plain_layer1, resLayer1,
+                                plain_controller.num_slots);
     }
     utils::print_duration(startLayer, "Layer 1 took:");
 
@@ -676,8 +676,8 @@ static void execute_resnet20()
         debug_decrypt("Layer 2 out", resLayer2, 8);
     }
     if (compare_plain_sim) {
-        compare_plain_sim("Layer 2", plain_layer2, resLayer2,
-                          plain_controller.num_slots);
+        compare_plain_sim_layer("Layer 2", plain_layer2, resLayer2,
+                                plain_controller.num_slots);
     }
     utils::print_duration(startLayer, "Layer 2 took:");
 
@@ -689,8 +689,8 @@ static void execute_resnet20()
         debug_decrypt("Layer 3 out", resLayer3, 8);
     }
     if (compare_plain_sim) {
-        compare_plain_sim("Layer 3", plain_layer3, resLayer3,
-                          plain_controller.num_slots);
+        compare_plain_sim_layer("Layer 3", plain_layer3, resLayer3,
+                                plain_controller.num_slots);
     }
     utils::print_duration(startLayer, "Layer 3 took:");
 
@@ -701,8 +701,8 @@ static void execute_resnet20()
         debug_decrypt("Final layer out", finalRes, 10);
     }
     if (compare_plain_sim) {
-        compare_plain_sim("Final layer", plain_final, finalRes,
-                          plain_controller.num_slots);
+        compare_plain_sim_layer("Final layer", plain_final, finalRes,
+                                plain_controller.num_slots);
     }
 
     utils::print_duration_yellow(start,
