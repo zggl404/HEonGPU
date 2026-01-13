@@ -27,6 +27,8 @@ static bool debug_cuda = false;
 static bool debug_encode = false;
 static bool debug_plain = false;
 
+static void debug_decrypt(const std::string& label, const Ctxt& c, int slots);
+
 static void parse_args(int argc, char* argv[])
 {
     for (int i = 1; i < argc; i++) {
@@ -113,23 +115,6 @@ static Ctxt initial_layer(const Ctxt& in)
     }
     return res;
 }
-
-static void debug_decrypt(const std::string& label, const Ctxt& c, int slots)
-{
-    std::vector<double> v = controller.decrypt_tovector(c, slots);
-    auto minmax = std::minmax_element(v.begin(), v.end());
-    std::cout << label << " min=" << std::fixed << std::setprecision(6)
-              << *minmax.first << " max=" << *minmax.second << " head=[";
-    size_t head = std::min<size_t>(v.size(), 8);
-    for (size_t i = 0; i < head; i++) {
-        if (i > 0) {
-            std::cout << ", ";
-        }
-        std::cout << v[i];
-    }
-    std::cout << "]" << std::endl;
-}
-
 static void debug_decrypt(const std::string& label, const Ctxt& c, int slots)
 {
     std::vector<double> v = controller.decrypt_tovector(c, slots);
