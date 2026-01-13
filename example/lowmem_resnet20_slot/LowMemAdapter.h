@@ -472,7 +472,7 @@ class FHEController {
             std::vector<double> vals;
             encoder_->decode(vals, p);
             for (double& v : vals) {
-                v = (v > 0.0) ? (v / scale) : 0.0;
+                v = (v > 0.0) ? v : 0.0;
             }
             Ptxt p_out(context_);
             encoder_->encode(p_out, vals, c.scale());
