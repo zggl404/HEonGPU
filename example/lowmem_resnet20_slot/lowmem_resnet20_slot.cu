@@ -756,7 +756,7 @@ static void execute_resnet20()
         plain_controller.weights_dir = weights_dir;
         plain_controller.num_slots = controller.num_slots;
         plain_controller.relu_degree = controller.relu_degree;
-        plain_controller.relu_div_scale = true;
+        plain_controller.relu_div_scale = controller.plain_relu_div_scale;
     }
 
     plainsim::PlainVec plain_initial;
@@ -781,6 +781,23 @@ static void execute_resnet20()
         std::cout << "PlainSim top-1: " << utils::get_class(index_max)
                   << " (" << index_max << ")" << std::endl;
         return;
+    }
+    if (compare_plain_sim) {
+        std::cout << "PlainSim output:[";
+        for (int i = 0; i < 10; i++) {
+            if (i > 0) {
+                std::cout << ", ";
+            }
+            std::cout << std::fixed << std::setprecision(3)
+                      << plain_final[static_cast<size_t>(i)];
+        }
+        std::cout << "]" << std::endl;
+        auto max_it = std::max_element(plain_final.begin(),
+                                       plain_final.begin() + 10);
+        int index_max = static_cast<int>(std::distance(plain_final.begin(),
+                                                       max_it));
+        std::cout << "PlainSim top-1: " << utils::get_class(index_max)
+                  << " (" << index_max << ")" << std::endl;
     }
 
     Ctxt in = controller.encrypt(
