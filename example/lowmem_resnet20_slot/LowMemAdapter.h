@@ -91,6 +91,7 @@ class FHEController {
     std::string weights_dir;
     bool debug_cuda = false;
     bool debug_encode = false;
+    bool plain_relu = true;
     std::string debug_label;
 
     size_t mul_count = 0;
@@ -465,6 +466,23 @@ class FHEController {
             std::cout << "relu input depth=" << c.depth()
                       << " level=" << c.level()
                       << " scale=" << c.scale() << std::endl;
+        }
+        if (plain_relu) {
+            Ptxt p = decrypt(c);
+            std::vector<double> vals;
+            encoder_->decode(vals, p);
+            for (double& v : vals) {
+                v = (v > 0.0) ? (v / scale) : 0.0;
+            }
+            Ptxt p_out(context_);
+            encoder_->encode(p_out, vals, c.scale());
+            Ctxt out(context_);
+            encryptor_->encrypt(out, p_out);
+            drop_to_depth(out, c.depth());
+            if (timing) {
+                utils::print_duration(start, "ReLU plaintext");
+            }
+            return out;
         }
         std::vector<double> coeffs = relu_coefficients(scale, relu_degree);
         Ctxt out(context_);
