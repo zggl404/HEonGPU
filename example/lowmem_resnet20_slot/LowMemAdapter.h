@@ -92,6 +92,7 @@ class FHEController {
     bool debug_cuda = false;
     bool debug_encode = false;
     bool plain_relu = true;
+    bool plain_relu_div_scale = false;
     std::string debug_label;
 
     size_t mul_count = 0;
