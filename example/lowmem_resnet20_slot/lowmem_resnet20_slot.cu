@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iomanip>
@@ -6,6 +7,7 @@
 #include <vector>
 
 #include "LowMemAdapter.h"
+#include "PlainSimAdapter.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -17,6 +19,7 @@ using lowmem::FHEController;
 using lowmem::HEConfig;
 
 static FHEController controller;
+static plainsim::PlainSimController plain_controller;
 
 static std::string data_dir;
 static std::string weights_dir;
@@ -26,6 +29,8 @@ static bool plain = false;
 static bool debug_cuda = false;
 static bool debug_encode = false;
 static bool debug_plain = false;
+static bool plain_sim = false;
+static bool compare_plain_sim = false;
 
 static void debug_decrypt(const std::string& label, const Ctxt& c, int slots);
 
@@ -49,6 +54,10 @@ static void parse_args(int argc, char* argv[])
             debug_encode = true;
         } else if (arg == "--debug_plain") {
             debug_plain = true;
+        } else if (arg == "--plain_sim") {
+            plain_sim = true;
+        } else if (arg == "--compare_plain_sim") {
+            compare_plain_sim = true;
         }
     }
 }
@@ -132,6 +141,210 @@ static void debug_decrypt(const std::string& label, const Ctxt& c, int slots)
         std::cout << v[i];
     }
     std::cout << "]" << std::endl;
+}
+
+static double max_abs_diff(const std::vector<double>& a,
+                           const std::vector<double>& b)
+{
+    size_t n = std::min(a.size(), b.size());
+    double max_err = 0.0;
+    for (size_t i = 0; i < n; i++) {
+        double err = std::abs(a[i] - b[i]);
+        if (err > max_err) max_err = err;
+    }
+    return max_err;
+}
+
+static void compare_plain_sim(const std::string& label,
+                              const plainsim::PlainVec& plain,
+                              const Ctxt& c, int slots)
+{
+    std::vector<double> dec = controller.decrypt_tovector(c, slots);
+    double max_err = max_abs_diff(plain, dec);
+    std::cout << label << " max_abs=" << std::setprecision(6) << max_err
+              << std::endl;
+}
+
+static plainsim::PlainVec initial_layer_plain(const plainsim::PlainVec& in)
+{
+    double scale = 0.90;
+    plainsim::PlainVec res =
+        plain_controller.convbn_initial(in, scale, verbose > 1);
+    res = plain_controller.bootstrap(res, verbose > 1);
+    res = plain_controller.relu(res, scale, verbose > 1);
+    return res;
+}
+
+static plainsim::PlainVec layer1_plain(const plainsim::PlainVec& in)
+{
+    bool timing = verbose > 1;
+    double scale = 1.00;
+
+    plainsim::PlainVec res1 = plain_controller.convbn(in, 1, 1, scale, timing);
+    res1 = plain_controller.bootstrap(res1, timing);
+    res1 = plain_controller.relu(res1, scale, timing);
+
+    scale = 0.52;
+
+    res1 = plain_controller.convbn(res1, 1, 2, scale, timing);
+    res1 = plain_controller.add(res1, plain_controller.mult(in, scale));
+    res1 = plain_controller.bootstrap(res1, timing);
+    res1 = plain_controller.relu(res1, scale, timing);
+
+    scale = 0.55;
+
+    plainsim::PlainVec res2 = plain_controller.convbn(res1, 2, 1, scale, timing);
+    res2 = plain_controller.bootstrap(res2, timing);
+    res2 = plain_controller.relu(res2, scale, timing);
+
+    scale = 0.36;
+
+    res2 = plain_controller.convbn(res2, 2, 2, scale, timing);
+    res2 = plain_controller.add(res2, plain_controller.mult(res1, scale));
+    res2 = plain_controller.bootstrap(res2, timing);
+    res2 = plain_controller.relu(res2, scale, timing);
+
+    scale = 0.63;
+
+    plainsim::PlainVec res3 = plain_controller.convbn(res2, 3, 1, scale, timing);
+    res3 = plain_controller.bootstrap(res3, timing);
+    res3 = plain_controller.relu(res3, scale, timing);
+
+    scale = 0.42;
+
+    res3 = plain_controller.convbn(res3, 3, 2, scale, timing);
+    res3 = plain_controller.add(res3, plain_controller.mult(res2, scale));
+    res3 = plain_controller.bootstrap(res3, timing);
+    res3 = plain_controller.relu(res3, scale, timing);
+
+    return res3;
+}
+
+static plainsim::PlainVec layer2_plain(const plainsim::PlainVec& in)
+{
+    double scaleSx = 0.57;
+    double scaleDx = 0.40;
+    bool timing = verbose > 1;
+
+    plainsim::PlainVec boot_in = plain_controller.bootstrap(in, timing);
+
+    std::vector<plainsim::PlainVec> res1sx =
+        plain_controller.convbn1632sx(boot_in, 4, 1, scaleSx, timing);
+    std::vector<plainsim::PlainVec> res1dx =
+        plain_controller.convbn1632dx(boot_in, 4, 1, scaleDx, timing);
+
+    plainsim::PlainVec fullpackSx =
+        plain_controller.downsample1024to256(res1sx[0], res1sx[1]);
+    plainsim::PlainVec fullpackDx =
+        plain_controller.downsample1024to256(res1dx[0], res1dx[1]);
+
+    plain_controller.num_slots = 8192;
+    fullpackSx = plain_controller.bootstrap(fullpackSx, timing);
+
+    fullpackSx = plain_controller.relu(fullpackSx, scaleSx, timing);
+    fullpackSx = plain_controller.convbn2(fullpackSx, 4, 2, scaleDx, timing);
+
+    plainsim::PlainVec res1 = plain_controller.bootstrap(fullpackDx, timing);
+    res1 = plain_controller.relu(res1, scaleDx, timing);
+    res1 = plain_controller.add(res1, fullpackSx);
+
+    double scale = 0.76;
+    plainsim::PlainVec res2 = plain_controller.convbn2(res1, 5, 1, scale, timing);
+    res2 = plain_controller.bootstrap(res2, timing);
+    res2 = plain_controller.relu(res2, scale, timing);
+
+    scale = 0.37;
+    res2 = plain_controller.convbn2(res2, 5, 2, scale, timing);
+    res2 = plain_controller.add(res2, plain_controller.mult(res1, scale));
+    res2 = plain_controller.bootstrap(res2, timing);
+    res2 = plain_controller.relu(res2, scale, timing);
+
+    scale = 0.63;
+    plainsim::PlainVec res3 = plain_controller.convbn2(res2, 6, 1, scale, timing);
+    res3 = plain_controller.bootstrap(res3, timing);
+    res3 = plain_controller.relu(res3, scale, timing);
+
+    scale = 0.25;
+    res3 = plain_controller.convbn2(res3, 6, 2, scale, timing);
+    res3 = plain_controller.add(res3, plain_controller.mult(res2, scale));
+    res3 = plain_controller.bootstrap(res3, timing);
+    res3 = plain_controller.relu(res3, scale, timing);
+
+    return res3;
+}
+
+static plainsim::PlainVec layer3_plain(const plainsim::PlainVec& in)
+{
+    double scaleSx = 0.63;
+    double scaleDx = 0.40;
+    bool timing = verbose > 1;
+
+    plainsim::PlainVec boot_in = plain_controller.bootstrap(in, timing);
+
+    std::vector<plainsim::PlainVec> res1sx =
+        plain_controller.convbn3264sx(boot_in, 7, 1, scaleSx, timing);
+    std::vector<plainsim::PlainVec> res1dx =
+        plain_controller.convbn3264dx(boot_in, 7, 1, scaleDx, timing);
+
+    plainsim::PlainVec fullpackSx =
+        plain_controller.downsample256to64(res1sx[0], res1sx[1]);
+    plainsim::PlainVec fullpackDx =
+        plain_controller.downsample256to64(res1dx[0], res1dx[1]);
+
+    plain_controller.num_slots = 4096;
+    fullpackSx = plain_controller.bootstrap(fullpackSx, timing);
+
+    fullpackSx = plain_controller.relu(fullpackSx, scaleSx, timing);
+    fullpackSx = plain_controller.convbn3(fullpackSx, 7, 2, scaleDx, timing);
+
+    plainsim::PlainVec res1 = plain_controller.bootstrap(fullpackDx, timing);
+    res1 = plain_controller.relu(res1, scaleDx, timing);
+    res1 = plain_controller.add(res1, fullpackSx);
+
+    double scale = 0.57;
+    plainsim::PlainVec res2 = plain_controller.convbn3(res1, 8, 1, scale, timing);
+    res2 = plain_controller.bootstrap(res2, timing);
+    res2 = plain_controller.relu(res2, scale, timing);
+
+    scale = 0.33;
+    res2 = plain_controller.convbn3(res2, 8, 2, scale, timing);
+    res2 = plain_controller.add(res2, plain_controller.mult(res1, scale));
+    res2 = plain_controller.bootstrap(res2, timing);
+    res2 = plain_controller.relu(res2, scale, timing);
+
+    scale = 0.69;
+    plainsim::PlainVec res3 = plain_controller.convbn3(res2, 9, 1, scale, timing);
+    res3 = plain_controller.bootstrap(res3, timing);
+    res3 = plain_controller.relu(res3, scale, timing);
+
+    scale = 0.10;
+    res3 = plain_controller.convbn3(res3, 9, 2, scale, timing);
+    res3 = plain_controller.add(res3, plain_controller.mult(res2, scale));
+    res3 = plain_controller.bootstrap(res3, timing);
+    res3 = plain_controller.relu(res3, scale, timing);
+    res3 = plain_controller.bootstrap(res3, timing);
+
+    return res3;
+}
+
+static plainsim::PlainVec final_layer_plain(const plainsim::PlainVec& in)
+{
+    plain_controller.num_slots = 4096;
+
+    std::vector<double> fc_weight =
+        utils::read_fc_weight(weights_dir + "/fc.bin");
+    plainsim::PlainVec weight =
+        plain_controller.encode_like(fc_weight, plain_controller.num_slots);
+
+    plainsim::PlainVec res = plain_controller.rotsum(in, 64);
+    res = plain_controller.mult(
+        res, plain_controller.mask_mod(64, 0, 1.0 / 64.0));
+
+    res = plain_controller.repeat(res, 16);
+    res = plain_controller.mult(res, weight);
+    res = plain_controller.rotsum_padded(res, 64);
+
+    return res;
 }
 
 static Ctxt layer1(const Ctxt& in)
@@ -391,9 +604,43 @@ static void execute_resnet20()
                   << std::endl;
         return;
     }
+
+    plainsim::PlainVec plain_input = plain_controller.pad_input(input_image);
+    if (plain_sim || compare_plain_sim) {
+        plain_controller.weights_dir = weights_dir;
+        plain_controller.num_slots = controller.num_slots;
+        plain_controller.relu_degree = controller.relu_degree;
+        plain_controller.relu_div_scale = true;
+    }
+
+    plainsim::PlainVec plain_initial;
+    plainsim::PlainVec plain_layer1;
+    plainsim::PlainVec plain_layer2;
+    plainsim::PlainVec plain_layer3;
+    plainsim::PlainVec plain_final;
+
+    if (plain_sim || compare_plain_sim) {
+        plain_initial = initial_layer_plain(plain_input);
+        plain_layer1 = layer1_plain(plain_initial);
+        plain_layer2 = layer2_plain(plain_layer1);
+        plain_layer3 = layer3_plain(plain_layer2);
+        plain_final = final_layer_plain(plain_layer3);
+    }
+
+    if (plain_sim && !compare_plain_sim) {
+        auto max_it = std::max_element(plain_final.begin(),
+                                       plain_final.begin() + 10);
+        int index_max = static_cast<int>(std::distance(plain_final.begin(),
+                                                       max_it));
+        std::cout << "PlainSim top-1: " << utils::get_class(index_max)
+                  << " (" << index_max << ")" << std::endl;
+        return;
+    }
+
     Ctxt in = controller.encrypt(
         input_image,
-        controller.circuit_depth - 4 - utils::get_relu_depth(controller.relu_degree));
+        controller.circuit_depth - 4 -
+            utils::get_relu_depth(controller.relu_degree));
 
     auto start = utils::start_time();
 
@@ -403,6 +650,10 @@ static void execute_resnet20()
     if (debug_plain) {
         debug_decrypt("Initial layer out", firstLayer, 8);
     }
+    if (compare_plain_sim) {
+        compare_plain_sim("Initial layer", plain_initial, firstLayer,
+                          plain_controller.num_slots);
+    }
 
     auto startLayer = utils::start_time();
     controller.print_level_scale(firstLayer, "Layer 1 in");
@@ -410,6 +661,10 @@ static void execute_resnet20()
     controller.print_level_scale(resLayer1, "Layer 1 out");
     if (debug_plain) {
         debug_decrypt("Layer 1 out", resLayer1, 8);
+    }
+    if (compare_plain_sim) {
+        compare_plain_sim("Layer 1", plain_layer1, resLayer1,
+                          plain_controller.num_slots);
     }
     utils::print_duration(startLayer, "Layer 1 took:");
 
@@ -420,6 +675,10 @@ static void execute_resnet20()
     if (debug_plain) {
         debug_decrypt("Layer 2 out", resLayer2, 8);
     }
+    if (compare_plain_sim) {
+        compare_plain_sim("Layer 2", plain_layer2, resLayer2,
+                          plain_controller.num_slots);
+    }
     utils::print_duration(startLayer, "Layer 2 took:");
 
     startLayer = utils::start_time();
@@ -429,6 +688,10 @@ static void execute_resnet20()
     if (debug_plain) {
         debug_decrypt("Layer 3 out", resLayer3, 8);
     }
+    if (compare_plain_sim) {
+        compare_plain_sim("Layer 3", plain_layer3, resLayer3,
+                          plain_controller.num_slots);
+    }
     utils::print_duration(startLayer, "Layer 3 took:");
 
     controller.print_level_scale(resLayer3, "Final layer in");
@@ -436,6 +699,10 @@ static void execute_resnet20()
     controller.print_level_scale(finalRes, "Final layer out");
     if (debug_plain) {
         debug_decrypt("Final layer out", finalRes, 10);
+    }
+    if (compare_plain_sim) {
+        compare_plain_sim("Final layer", plain_final, finalRes,
+                          plain_controller.num_slots);
     }
 
     utils::print_duration_yellow(start,
