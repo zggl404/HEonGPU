@@ -1,8 +1,10 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BINARY_LOCATION}/examples)
 
 add_executable(lowmem_resnet20_slot lowmem_resnet20_slot.cu)
+add_executable(lowmem_resnet20_plain_sim lowmem_resnet20_plain_sim.cpp)
 
 target_link_libraries(lowmem_resnet20_slot PRIVATE heongpu CUDA::cudart OpenMP::OpenMP_CXX)
+target_link_libraries(lowmem_resnet20_plain_sim PRIVATE OpenMP::OpenMP_CXX)
 target_compile_options(lowmem_resnet20_slot PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fopenmp>)
 set_target_properties(lowmem_resnet20_slot PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON

@@ -16,14 +16,18 @@ using PlainVec = std::vector<double>;
 class PlainSimController {
   public:
     int num_slots = 0;
+    int base_slots = 0;
     int relu_degree = 119;
     bool relu_div_scale = true;
     std::string weights_dir;
 
     PlainVec pad_input(const PlainVec& values)
     {
-        PlainVec out(static_cast<size_t>(num_slots), 0.0);
-        int n = std::min(static_cast<int>(values.size()), num_slots);
+        if (base_slots == 0) {
+            base_slots = num_slots;
+        }
+        PlainVec out(static_cast<size_t>(base_slots), 0.0);
+        int n = std::min(static_cast<int>(values.size()), base_slots);
         for (int i = 0; i < n; i++) {
             out[static_cast<size_t>(i)] = values[static_cast<size_t>(i)];
         }
@@ -32,12 +36,36 @@ class PlainSimController {
 
     PlainVec encode_like(const PlainVec& values, int plaintext_num_slots)
     {
-        PlainVec out(static_cast<size_t>(num_slots), 0.0);
-        int n = std::min(plaintext_num_slots, num_slots);
+        if (base_slots == 0) {
+            base_slots = num_slots;
+        }
+        PlainVec out(static_cast<size_t>(base_slots), 0.0);
+        int n = std::min(plaintext_num_slots, base_slots);
         for (int i = 0; i < n; i++) {
             if (i < static_cast<int>(values.size())) {
                 out[static_cast<size_t>(i)] = values[static_cast<size_t>(i)];
             }
+        }
+        return out;
+    }
+
+    PlainVec zero_vec() const
+    {
+        return PlainVec(static_cast<size_t>(base_slots), 0.0);
+    }
+
+    PlainVec read_values_scaled(const std::string& path, double scale)
+    {
+        return utils::read_values_from_file(path, scale);
+    }
+
+    PlainVec mult_scaled(const PlainVec& a, const PlainVec& b, double scale)
+    {
+        PlainVec out = a;
+        const size_t n = std::min(out.size(), b.size());
+        double inv = (scale == 0.0) ? 1.0 : (1.0 / scale);
+        for (size_t i = 0; i < n; i++) {
+            out[i] = out[i] * b[i] * inv;
         }
         return out;
     }
@@ -136,7 +164,7 @@ class PlainSimController {
 
     PlainVec gen_mask(int n, int /*target_depth*/)
     {
-        PlainVec mask(static_cast<size_t>(num_slots), 0.0);
+        PlainVec mask(static_cast<size_t>(base_slots), 0.0);
         int copy_interval = n;
         for (int i = 0; i < num_slots; i++) {
             if (copy_interval > 0) {
@@ -152,7 +180,7 @@ class PlainSimController {
 
     PlainVec mask_first_n(int n, int /*target_depth*/)
     {
-        PlainVec mask(static_cast<size_t>(num_slots), 0.0);
+        PlainVec mask(static_cast<size_t>(base_slots), 0.0);
         for (int i = 0; i < std::min(n, num_slots); i++) {
             mask[static_cast<size_t>(i)] = 1.0;
         }
@@ -161,7 +189,7 @@ class PlainSimController {
 
     PlainVec mask_second_n(int n, int /*target_depth*/)
     {
-        PlainVec mask(static_cast<size_t>(num_slots), 0.0);
+        PlainVec mask(static_cast<size_t>(base_slots), 0.0);
         int start = std::min(n, num_slots);
         for (int i = start; i < std::min(2 * n, num_slots); i++) {
             mask[static_cast<size_t>(i)] = 1.0;
@@ -171,7 +199,7 @@ class PlainSimController {
 
     PlainVec mask_first_n_mod(int n, int mod, int shift, int /*target_depth*/)
     {
-        PlainVec mask(static_cast<size_t>(num_slots), 0.0);
+        PlainVec mask(static_cast<size_t>(base_slots), 0.0);
         for (int i = 0; i < num_slots; i++) {
             if ((i % mod) < n) {
                 int idx = i + shift;
@@ -185,7 +213,7 @@ class PlainSimController {
 
     PlainVec mask_first_n_mod2(int n, int mod, int shift, int /*target_depth*/)
     {
-        PlainVec mask(static_cast<size_t>(num_slots), 0.0);
+        PlainVec mask(static_cast<size_t>(base_slots), 0.0);
         for (int i = 0; i < num_slots; i++) {
             if ((i % mod) < n) {
                 int idx = i + shift;
@@ -200,7 +228,7 @@ class PlainSimController {
     PlainVec mask_channel(int n, int /*target_depth*/)
     {
         PlainVec mask;
-        mask.reserve(static_cast<size_t>(num_slots));
+        mask.reserve(static_cast<size_t>(base_slots));
 
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < 256; j++) {
@@ -218,8 +246,8 @@ class PlainSimController {
             }
         }
 
-        if (static_cast<int>(mask.size()) < num_slots) {
-            mask.resize(static_cast<size_t>(num_slots), 0.0);
+        if (static_cast<int>(mask.size()) < base_slots) {
+            mask.resize(static_cast<size_t>(base_slots), 0.0);
         }
         return mask;
     }
@@ -227,7 +255,7 @@ class PlainSimController {
     PlainVec mask_channel_2(int n, int /*target_depth*/)
     {
         PlainVec mask;
-        mask.reserve(static_cast<size_t>(num_slots));
+        mask.reserve(static_cast<size_t>(base_slots));
 
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < 64; j++) {
@@ -245,15 +273,15 @@ class PlainSimController {
             }
         }
 
-        if (static_cast<int>(mask.size()) < num_slots) {
-            mask.resize(static_cast<size_t>(num_slots), 0.0);
+        if (static_cast<int>(mask.size()) < base_slots) {
+            mask.resize(static_cast<size_t>(base_slots), 0.0);
         }
         return mask;
     }
 
     PlainVec mask_mod(int n, int /*target_depth*/, double custom_val)
     {
-        PlainVec vec(static_cast<size_t>(num_slots), 0.0);
+        PlainVec vec(static_cast<size_t>(base_slots), 0.0);
         for (int i = 0; i < num_slots; i++) {
             if (i % n == 0) {
                 vec[static_cast<size_t>(i)] = custom_val;
@@ -264,7 +292,7 @@ class PlainSimController {
 
     PlainVec mask_from_to(int from, int to, int /*target_depth*/)
     {
-        PlainVec vec(static_cast<size_t>(num_slots), 0.0);
+        PlainVec vec(static_cast<size_t>(base_slots), 0.0);
         for (int i = from; i < std::min(to, num_slots); i++) {
             vec[static_cast<size_t>(i)] = 1.0;
         }
@@ -294,23 +322,23 @@ class PlainSimController {
         c_rotations.push_back(
             rotate_vector(rotate_vector(in, padding), img_width));
 
-        PlainVec bias_values = utils::read_values_from_file(
+        PlainVec bias_values = read_values_scaled(
             weights_dir + "/conv1bn1-bias.bin", scale);
         PlainVec bias = encode_like(bias_values, 16384);
 
-        PlainVec finalsum(static_cast<size_t>(num_slots), 0.0);
+        PlainVec finalsum = zero_vec();
         bool init = false;
 
         for (int j = 0; j < 16; j++) {
             std::vector<PlainVec> k_rows;
             k_rows.reserve(9);
             for (int k = 0; k < 9; k++) {
-                PlainVec values = utils::read_values_from_file(
+                PlainVec values = read_values_scaled(
                     weights_dir + "/conv1bn1-ch" + std::to_string(j) + "-k" +
                         std::to_string(k + 1) + ".bin",
                     scale);
                 PlainVec encoded = encode_like(values, 16384);
-                k_rows.push_back(mult(c_rotations[k], encoded));
+                k_rows.push_back(mult_scaled(c_rotations[k], encoded, scale));
             }
 
             PlainVec sum = k_rows[0];
@@ -363,26 +391,26 @@ class PlainSimController {
         c_rotations.push_back(
             rotate_vector(rotate_vector(in, padding), img_width));
 
-        PlainVec bias_values = utils::read_values_from_file(
+        PlainVec bias_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
             scale);
 
-        PlainVec finalsum(static_cast<size_t>(num_slots), 0.0);
+        PlainVec finalsum = zero_vec();
         bool init = false;
 
         for (int j = 0; j < 16; j++) {
             std::vector<PlainVec> k_rows;
             k_rows.reserve(9);
             for (int k = 0; k < 9; k++) {
-                PlainVec values = utils::read_values_from_file(
+                PlainVec values = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j) + "-k" +
                         std::to_string(k + 1) + ".bin",
                     scale);
                 PlainVec encoded = encode_like(values, 16384);
-                k_rows.push_back(mult(c_rotations[k], encoded));
+                k_rows.push_back(mult_scaled(c_rotations[k], encoded, scale));
             }
 
             PlainVec sum = k_rows[0];
@@ -437,26 +465,26 @@ class PlainSimController {
         c_rotations.push_back(
             rotate_vector(rotate_vector(in, padding), img_width));
 
-        PlainVec bias_values = utils::read_values_from_file(
+        PlainVec bias_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
             scale);
 
-        PlainVec finalsum(static_cast<size_t>(num_slots), 0.0);
+        PlainVec finalsum = zero_vec();
         bool init = false;
 
         for (int j = 0; j < 32; j++) {
             std::vector<PlainVec> k_rows;
             k_rows.reserve(9);
             for (int k = 0; k < 9; k++) {
-                PlainVec values = utils::read_values_from_file(
+                PlainVec values = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j) + "-k" +
                         std::to_string(k + 1) + ".bin",
                     scale);
                 PlainVec encoded = encode_like(values, 8192);
-                k_rows.push_back(mult(c_rotations[k], encoded));
+                k_rows.push_back(mult_scaled(c_rotations[k], encoded, scale));
             }
 
             PlainVec sum = k_rows[0];
@@ -507,26 +535,26 @@ class PlainSimController {
         c_rotations.push_back(
             rotate_vector(rotate_vector(in, padding), img_width));
 
-        PlainVec bias_values = utils::read_values_from_file(
+        PlainVec bias_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
             scale);
 
-        PlainVec finalsum(static_cast<size_t>(num_slots), 0.0);
+        PlainVec finalsum = zero_vec();
         bool init = false;
 
         for (int j = 0; j < 64; j++) {
             std::vector<PlainVec> k_rows;
             k_rows.reserve(9);
             for (int k = 0; k < 9; k++) {
-                PlainVec values = utils::read_values_from_file(
+                PlainVec values = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j) + "-k" +
                         std::to_string(k + 1) + ".bin",
                     scale);
                 PlainVec encoded = encode_like(values, 4096);
-                k_rows.push_back(mult(c_rotations[k], encoded));
+                k_rows.push_back(mult_scaled(c_rotations[k], encoded, scale));
             }
 
             PlainVec sum = k_rows[0];
@@ -578,17 +606,17 @@ class PlainSimController {
         c_rotations.push_back(
             rotate_vector(rotate_vector(in, padding), img_width));
 
-        PlainVec bias1_values = utils::read_values_from_file(
+        PlainVec bias1_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
             scale);
-        PlainVec bias2_values = utils::read_values_from_file(
+        PlainVec bias2_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
             scale);
 
-        PlainVec finalSum016(static_cast<size_t>(num_slots), 0.0);
-        PlainVec finalSum1632(static_cast<size_t>(num_slots), 0.0);
+        PlainVec finalSum016 = zero_vec();
+        PlainVec finalSum1632 = zero_vec();
 
         bool init = false;
 
@@ -598,13 +626,13 @@ class PlainSimController {
             std::vector<PlainVec> k_rows2;
             k_rows2.reserve(9);
             for (int k = 0; k < 9; k++) {
-                PlainVec values = utils::read_values_from_file(
+                PlainVec values = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j) + "-k" +
                         std::to_string(k + 1) + ".bin",
                     scale);
-                PlainVec values2 = utils::read_values_from_file(
+                PlainVec values2 = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j + 16) + "-k" +
@@ -612,8 +640,8 @@ class PlainSimController {
                     scale);
                 PlainVec encoded = encode_like(values, 16384);
                 PlainVec encoded2 = encode_like(values2, 16384);
-                k_rows.push_back(mult(c_rotations[k], encoded));
-                k_rows2.push_back(mult(c_rotations[k], encoded2));
+                k_rows.push_back(mult_scaled(c_rotations[k], encoded, scale));
+                k_rows2.push_back(mult_scaled(c_rotations[k], encoded2, scale));
             }
 
             PlainVec sum016 = k_rows[0];
@@ -673,17 +701,17 @@ class PlainSimController {
         c_rotations.push_back(in);
         c_rotations.push_back(rotate_vector(in, img_width));
 
-        PlainVec bias1_values = utils::read_values_from_file(
+        PlainVec bias1_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
             scale);
-        PlainVec bias2_values = utils::read_values_from_file(
+        PlainVec bias2_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
             scale);
 
-        PlainVec finalSum016(static_cast<size_t>(num_slots), 0.0);
-        PlainVec finalSum1632(static_cast<size_t>(num_slots), 0.0);
+        PlainVec finalSum016 = zero_vec();
+        PlainVec finalSum1632 = zero_vec();
 
         bool init = false;
 
@@ -693,13 +721,13 @@ class PlainSimController {
             std::vector<PlainVec> k_rows2;
             k_rows2.reserve(3);
             for (int k = 0; k < 3; k++) {
-                PlainVec values = utils::read_values_from_file(
+                PlainVec values = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j) + "-k" +
                         std::to_string(1) + ".bin",
                     scale);
-                PlainVec values2 = utils::read_values_from_file(
+                PlainVec values2 = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j + 16) + "-k" +
@@ -707,8 +735,8 @@ class PlainSimController {
                     scale);
                 PlainVec encoded = encode_like(values, 16384);
                 PlainVec encoded2 = encode_like(values2, 16384);
-                k_rows.push_back(mult(c_rotations[k], encoded));
-                k_rows2.push_back(mult(c_rotations[k], encoded2));
+                k_rows.push_back(mult_scaled(c_rotations[k], encoded, scale));
+                k_rows2.push_back(mult_scaled(c_rotations[k], encoded2, scale));
             }
 
             PlainVec sum016 = k_rows[0];
@@ -768,17 +796,17 @@ class PlainSimController {
         c_rotations.push_back(
             rotate_vector(rotate_vector(in, padding), img_width));
 
-        PlainVec bias1_values = utils::read_values_from_file(
+        PlainVec bias1_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
             scale);
-        PlainVec bias2_values = utils::read_values_from_file(
+        PlainVec bias2_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
             scale);
 
-        PlainVec finalSum032(static_cast<size_t>(num_slots), 0.0);
-        PlainVec finalSum3264(static_cast<size_t>(num_slots), 0.0);
+        PlainVec finalSum032 = zero_vec();
+        PlainVec finalSum3264 = zero_vec();
 
         bool init = false;
 
@@ -788,13 +816,13 @@ class PlainSimController {
             std::vector<PlainVec> k_rows2;
             k_rows2.reserve(9);
             for (int k = 0; k < 9; k++) {
-                PlainVec values = utils::read_values_from_file(
+                PlainVec values = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j) + "-k" +
                         std::to_string(k + 1) + ".bin",
                     scale);
-                PlainVec values2 = utils::read_values_from_file(
+                PlainVec values2 = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j + 32) + "-k" +
@@ -802,8 +830,8 @@ class PlainSimController {
                     scale);
                 PlainVec encoded = encode_like(values, 8192);
                 PlainVec encoded2 = encode_like(values2, 8192);
-                k_rows.push_back(mult(c_rotations[k], encoded));
-                k_rows2.push_back(mult(c_rotations[k], encoded2));
+                k_rows.push_back(mult_scaled(c_rotations[k], encoded, scale));
+                k_rows2.push_back(mult_scaled(c_rotations[k], encoded2, scale));
             }
 
             PlainVec sum032 = k_rows[0];
@@ -853,17 +881,17 @@ class PlainSimController {
         c_rotations.push_back(in);
         c_rotations.push_back(rotate_vector(in, img_width));
 
-        PlainVec bias1_values = utils::read_values_from_file(
+        PlainVec bias1_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
             scale);
-        PlainVec bias2_values = utils::read_values_from_file(
+        PlainVec bias2_values = read_values_scaled(
             weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
                 std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
             scale);
 
-        PlainVec finalSum032(static_cast<size_t>(num_slots), 0.0);
-        PlainVec finalSum3264(static_cast<size_t>(num_slots), 0.0);
+        PlainVec finalSum032 = zero_vec();
+        PlainVec finalSum3264 = zero_vec();
 
         bool init = false;
 
@@ -873,13 +901,13 @@ class PlainSimController {
             std::vector<PlainVec> k_rows2;
             k_rows2.reserve(3);
             for (int k = 0; k < 3; k++) {
-                PlainVec values = utils::read_values_from_file(
+                PlainVec values = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j) + "-k" +
                         std::to_string(1) + ".bin",
                     scale);
-                PlainVec values2 = utils::read_values_from_file(
+                PlainVec values2 = read_values_scaled(
                     weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
                         std::to_string(n) + "bn" + std::to_string(n) +
                         "-ch" + std::to_string(j + 32) + "-k" +
@@ -887,8 +915,8 @@ class PlainSimController {
                     scale);
                 PlainVec encoded = encode_like(values, 8192);
                 PlainVec encoded2 = encode_like(values2, 8192);
-                k_rows.push_back(mult(c_rotations[k], encoded));
-                k_rows2.push_back(mult(c_rotations[k], encoded2));
+                k_rows.push_back(mult_scaled(c_rotations[k], encoded, scale));
+                k_rows2.push_back(mult_scaled(c_rotations[k], encoded2, scale));
             }
 
             PlainVec sum032 = k_rows[0];
@@ -940,7 +968,7 @@ class PlainSimController {
             mult_mask(add(fullpack, rotate_vector(fullpack, 4)), gen_mask(8, 0));
         fullpack = add(fullpack, rotate_vector(fullpack, 8));
 
-        PlainVec downsampledrows(static_cast<size_t>(num_slots), 0.0);
+        PlainVec downsampledrows = zero_vec();
 
         for (int i = 0; i < 16; i++) {
             PlainVec masked = mult_mask(
@@ -951,7 +979,7 @@ class PlainSimController {
             }
         }
 
-        PlainVec downsampledchannels(static_cast<size_t>(num_slots), 0.0);
+        PlainVec downsampledchannels = zero_vec();
         for (int i = 0; i < 32; i++) {
             PlainVec masked =
                 mult_mask(downsampledrows, mask_channel(i, 0));
@@ -985,7 +1013,7 @@ class PlainSimController {
                       gen_mask(4, 0));
         fullpack = add(fullpack, rotate_vector(fullpack, 4));
 
-        PlainVec downsampledrows(static_cast<size_t>(num_slots), 0.0);
+        PlainVec downsampledrows = zero_vec();
 
         for (int i = 0; i < 32; i++) {
             PlainVec masked =
@@ -996,7 +1024,7 @@ class PlainSimController {
             }
         }
 
-        PlainVec downsampledchannels(static_cast<size_t>(num_slots), 0.0);
+        PlainVec downsampledchannels = zero_vec();
         for (int i = 0; i < 64; i++) {
             PlainVec masked =
                 mult_mask(downsampledrows, mask_channel_2(i, 0));
