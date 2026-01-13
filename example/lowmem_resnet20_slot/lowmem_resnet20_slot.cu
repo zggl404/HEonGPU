@@ -109,6 +109,9 @@ static Ctxt initial_layer(const Ctxt& in)
     if (debug_plain) {
         debug_decrypt("Initial bootstrap out", res, 8);
     }
+    if (debug_plain) {
+        debug_decrypt("Initial relu in", res, 8);
+    }
     res = controller.relu(res, scale, verbose > 1);
     if (debug_plain) {
         debug_decrypt("Initial relu out", res, 8);
