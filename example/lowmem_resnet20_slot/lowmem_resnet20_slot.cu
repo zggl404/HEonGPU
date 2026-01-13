@@ -100,17 +100,28 @@ static Ctxt initial_layer(const Ctxt& in)
 {
     double scale = 0.90;
     Ctxt res = controller.convbn_initial(in, scale, verbose > 1);
+    if (debug_plain) {
+        debug_decrypt("Initial convbn out", res, 8);
+    }
     res = controller.bootstrap(res, verbose > 1);
+    if (debug_plain) {
+        debug_decrypt("Initial bootstrap out", res, 8);
+    }
     res = controller.relu(res, scale, verbose > 1);
+    if (debug_plain) {
+        debug_decrypt("Initial relu out", res, 8);
+    }
     return res;
 }
 
 static void debug_decrypt(const std::string& label, const Ctxt& c, int slots)
 {
     std::vector<double> v = controller.decrypt_tovector(c, slots);
-    std::cout << label << " [";
-    std::cout << std::fixed << std::setprecision(6);
-    for (size_t i = 0; i < v.size(); i++) {
+    auto minmax = std::minmax_element(v.begin(), v.end());
+    std::cout << label << " min=" << std::fixed << std::setprecision(6)
+              << *minmax.first << " max=" << *minmax.second << " head=[";
+    size_t head = std::min<size_t>(v.size(), 8);
+    for (size_t i = 0; i < head; i++) {
         if (i > 0) {
             std::cout << ", ";
         }
