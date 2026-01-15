@@ -399,7 +399,7 @@ class FHEController {
         Ctxt out(context_);
         try {
             operators_->rotate_rows(const_cast<Ctxt&>(c), out, *galois_key_,
-                                    steps);
+                                    -steps);
         } catch (const std::exception& ex) {
             report_exception("rotate", ex);
             throw;
