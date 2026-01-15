@@ -168,14 +168,15 @@ int main(int argc, char* argv[])
     const std::string bias_path = weights_dir + "/conv1bn1-bias.bin";
     const std::string w_path = weights_dir + "/conv1bn1-ch0-k1.bin";
     std::cout << "[STATS] bias_path=" << bias_path
-              << " text=" << (is_text_file(bias_path) ? "yes" : "no")
+              << " text=" << (utils::is_text_file(bias_path) ? "yes" : "no")
               << std::endl;
     std::cout << "[STATS] w_path=" << w_path
-              << " text=" << (is_text_file(w_path) ? "yes" : "no") << std::endl;
+              << " text=" << (utils::is_text_file(w_path) ? "yes" : "no")
+              << std::endl;
     print_vector_stats("bias",
-                       read_values_from_file(bias_path, 0.90));
+                       utils::read_values_from_file(bias_path, 0.90));
     print_vector_stats("w_ch0_k1",
-                       read_values_from_file(w_path, 0.90));
+                       utils::read_values_from_file(w_path, 0.90));
 
     dbg_dumper.dump_ct("Layer0/input encrypted (pre-initial_layer)", in);
     dbg_dumper.dump_ct("Layer0/initial_layer input (pre)", in);
