@@ -24,7 +24,7 @@ static std::string weights_dir;
 static std::string input_filename = "luis.png";
 static int verbose = 0;
 static bool plain = false;
-static int dbg = 0;
+static int dbg = 1;
 static int dbg_count = 20;
 static std::string dbg_layer_regex;
 static std::string reference_log_path;
@@ -594,7 +594,7 @@ int main(int argc, char* argv[])
     cfg.relu_degree = controller.relu_degree;
     controller.weights_dir = weights_dir;
     controller.initialize(cfg);
-    dbg_dumper.set_enabled(dbg != 0);
+    dbg_dumper.set_enabled(true);
     dbg_dumper.set_count(dbg_count);
     dbg_dumper.set_layer_regex(dbg_layer_regex);
     dbg_dumper.set_tolerances(tol_abs, tol_rel);
