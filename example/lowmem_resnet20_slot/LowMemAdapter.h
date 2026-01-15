@@ -561,6 +561,9 @@ class FHEController {
     {
         auto start = utils::start_time();
 
+        const int saved_slots = num_slots;
+        num_slots = 16384;
+
         int img_width = 32;
         int padding = 1;
 
@@ -636,6 +639,7 @@ class FHEController {
             utils::print_duration(start, "Initial layer");
         }
 
+        num_slots = saved_slots;
         return finalsum;
     }
 
