@@ -90,8 +90,64 @@ static inline void print_duration_yellow(
     }
 }
 
+static inline bool ends_with(const string& value, const string& suffix) {
+    if (suffix.size() > value.size()) {
+        return false;
+    }
+    return equal(suffix.rbegin(), suffix.rend(), value.rbegin());
+}
+
+static inline vector<double> read_values_from_file_bin(const string& filename,
+                                                       double scale = 1) {
+    vector<double> values;
+    ifstream file(filename, ios::binary);
+    if (!file.is_open()) {
+        cerr << "Can not open " << filename << endl;
+        return values;
+    }
+
+    file.seekg(0, ios::end);
+    const size_t size = static_cast<size_t>(file.tellg());
+    file.seekg(0, ios::beg);
+    if (size == 0) {
+        cerr << "Empty file " << filename << endl;
+        return values;
+    }
+
+    if (size % sizeof(float) == 0) {
+        const size_t count = size / sizeof(float);
+        vector<float> buf(count);
+        file.read(reinterpret_cast<char*>(buf.data()),
+                  static_cast<streamsize>(size));
+        values.reserve(count);
+        for (float v : buf) {
+            values.push_back(static_cast<double>(v) * scale);
+        }
+        return values;
+    }
+
+    if (size % sizeof(double) == 0) {
+        const size_t count = size / sizeof(double);
+        vector<double> buf(count);
+        file.read(reinterpret_cast<char*>(buf.data()),
+                  static_cast<streamsize>(size));
+        values.reserve(count);
+        for (double v : buf) {
+            values.push_back(v * scale);
+        }
+        return values;
+    }
+
+    cerr << "Unexpected binary size " << size << " in " << filename << endl;
+    return values;
+}
+
 static inline vector<double> read_values_from_file(const string& filename,
                                                    double scale = 1) {
+    if (ends_with(filename, ".bin")) {
+        return read_values_from_file_bin(filename, scale);
+    }
+
     vector<double> values;
     ifstream file(filename);
 
