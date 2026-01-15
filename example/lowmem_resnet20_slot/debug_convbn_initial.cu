@@ -97,6 +97,27 @@ static std::vector<double> read_image(const std::string& filename)
     return imageVector;
 }
 
+static void print_vector_stats(const std::string& label,
+                               const std::vector<double>& values)
+{
+    if (values.empty()) {
+        std::cout << "[STATS] " << label << " size=0" << std::endl;
+        return;
+    }
+    auto minmax = std::minmax_element(values.begin(), values.end());
+    std::cout << "[STATS] " << label << " size=" << values.size()
+              << " min=" << *minmax.first << " max=" << *minmax.second
+              << " first5=[";
+    const size_t limit = std::min<size_t>(5, values.size());
+    for (size_t i = 0; i < limit; ++i) {
+        if (i > 0) {
+            std::cout << ", ";
+        }
+        std::cout << values[i];
+    }
+    std::cout << "]" << std::endl;
+}
+
 int main(int argc, char* argv[])
 {
     parse_args(argc, argv);
@@ -119,6 +140,7 @@ int main(int argc, char* argv[])
     } else {
         weights_dir = resolve_path(repo_root, weights_dir).string();
     }
+    std::cout << "[STATS] weights_dir=" << weights_dir << std::endl;
 
     HEConfig cfg;
     cfg.relu_degree = controller.relu_degree;
@@ -142,6 +164,18 @@ int main(int argc, char* argv[])
         input_image,
         controller.circuit_depth - 4 -
             utils::get_relu_depth(controller.relu_degree));
+
+    const std::string bias_path = weights_dir + "/conv1bn1-bias.bin";
+    const std::string w_path = weights_dir + "/conv1bn1-ch0-k1.bin";
+    std::cout << "[STATS] bias_path=" << bias_path
+              << " text=" << (is_text_file(bias_path) ? "yes" : "no")
+              << std::endl;
+    std::cout << "[STATS] w_path=" << w_path
+              << " text=" << (is_text_file(w_path) ? "yes" : "no") << std::endl;
+    print_vector_stats("bias",
+                       read_values_from_file(bias_path, 0.90));
+    print_vector_stats("w_ch0_k1",
+                       read_values_from_file(w_path, 0.90));
 
     dbg_dumper.dump_ct("Layer0/input encrypted (pre-initial_layer)", in);
     dbg_dumper.dump_ct("Layer0/initial_layer input (pre)", in);
