@@ -114,18 +114,6 @@ static inline vector<double> read_values_from_file_bin(const string& filename,
         return values;
     }
 
-    if (size % sizeof(float) == 0) {
-        const size_t count = size / sizeof(float);
-        vector<float> buf(count);
-        file.read(reinterpret_cast<char*>(buf.data()),
-                  static_cast<streamsize>(size));
-        values.reserve(count);
-        for (float v : buf) {
-            values.push_back(static_cast<double>(v) * scale);
-        }
-        return values;
-    }
-
     if (size % sizeof(double) == 0) {
         const size_t count = size / sizeof(double);
         vector<double> buf(count);
@@ -134,6 +122,18 @@ static inline vector<double> read_values_from_file_bin(const string& filename,
         values.reserve(count);
         for (double v : buf) {
             values.push_back(v * scale);
+        }
+        return values;
+    }
+
+    if (size % sizeof(float) == 0) {
+        const size_t count = size / sizeof(float);
+        vector<float> buf(count);
+        file.read(reinterpret_cast<char*>(buf.data()),
+                  static_cast<streamsize>(size));
+        values.reserve(count);
+        for (float v : buf) {
+            values.push_back(static_cast<double>(v) * scale);
         }
         return values;
     }
