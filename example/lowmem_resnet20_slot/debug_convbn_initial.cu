@@ -188,6 +188,61 @@ int main(int argc, char* argv[])
     Ctxt res = controller.convbn_initial(in, scale, false);
     dbg_dumper.dump_ct("Initial layer convbn_initial (post)", res);
 
+    // Focused debug for j=0 in convbn_initial.
+    {
+        const int img_width = 32;
+        const int padding = 1;
+        std::vector<Ctxt> c_rotations;
+        c_rotations.push_back(
+            controller.rotate_vector(controller.rotate_vector(in, -padding),
+                                     -img_width));
+        c_rotations.push_back(controller.rotate_vector(in, -img_width));
+        c_rotations.push_back(
+            controller.rotate_vector(controller.rotate_vector(in, padding),
+                                     -img_width));
+        c_rotations.push_back(controller.rotate_vector(in, -padding));
+        c_rotations.push_back(in);
+        c_rotations.push_back(controller.rotate_vector(in, padding));
+        c_rotations.push_back(
+            controller.rotate_vector(controller.rotate_vector(in, -padding),
+                                     img_width));
+        c_rotations.push_back(controller.rotate_vector(in, img_width));
+        c_rotations.push_back(
+            controller.rotate_vector(controller.rotate_vector(in, padding),
+                                     img_width));
+
+        std::vector<Ctxt> k_rows;
+        k_rows.reserve(9);
+        for (int k = 0; k < 9; k++) {
+            std::vector<double> values = utils::read_values_from_file(
+                weights_dir + "/conv1bn1-ch0-k" + std::to_string(k + 1) +
+                    ".bin",
+                scale);
+            lowmem::Ptxt encoded = controller.encode(values, in.depth(), 16384);
+            Ctxt mul = controller.mult(c_rotations[k], encoded);
+            dbg_dumper.dump_ct("Initial layer convbn_initial/j0/k" +
+                                   std::to_string(k + 1) + " (post)",
+                               mul);
+            k_rows.push_back(mul);
+        }
+
+        Ctxt sum = k_rows[0];
+        for (size_t i = 1; i < k_rows.size(); i++) {
+            sum = controller.add(sum, k_rows[i]);
+        }
+        dbg_dumper.dump_ct("Initial layer convbn_initial/j0/sum (post)", sum);
+
+        Ctxt res0 = controller.add(sum, controller.rotate_vector(sum, 1024));
+        res0 = controller.add(
+            res0, controller.rotate_vector(controller.rotate_vector(sum, 1024),
+                                           1024));
+        Ctxt masked =
+            controller.mult_mask(res0, controller.mask_from_to(0, 1024,
+                                                              res0.depth()));
+        dbg_dumper.dump_ct("Initial layer convbn_initial/j0/masked (post)",
+                           masked);
+    }
+
     std::filesystem::path report_path(diff_report_path);
     if (!report_path.empty() && report_path.has_parent_path()) {
         std::filesystem::create_directories(report_path.parent_path());
