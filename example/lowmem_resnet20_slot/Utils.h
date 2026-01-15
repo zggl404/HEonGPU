@@ -97,6 +97,29 @@ static inline bool ends_with(const string& value, const string& suffix) {
     return equal(suffix.rbegin(), suffix.rend(), value.rbegin());
 }
 
+static inline bool is_text_file(const string& filename) {
+    ifstream file(filename, ios::binary);
+    if (!file.is_open()) {
+        return false;
+    }
+    char buf[64];
+    file.read(buf, sizeof(buf));
+    const streamsize n = file.gcount();
+    if (n <= 0) {
+        return false;
+    }
+    for (streamsize i = 0; i < n; ++i) {
+        unsigned char c = static_cast<unsigned char>(buf[i]);
+        if (c == 0) {
+            return false;
+        }
+        if (c < 9 || (c > 13 && c < 32) || c > 126) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static inline vector<double> read_values_from_file_bin(const string& filename,
                                                        double scale = 1) {
     vector<double> values;
@@ -144,7 +167,7 @@ static inline vector<double> read_values_from_file_bin(const string& filename,
 
 static inline vector<double> read_values_from_file(const string& filename,
                                                    double scale = 1) {
-    if (ends_with(filename, ".bin")) {
+    if (ends_with(filename, ".bin") && !is_text_file(filename)) {
         return read_values_from_file_bin(filename, scale);
     }
 
