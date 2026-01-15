@@ -249,6 +249,16 @@ class FHEController {
         return vec;
     }
 
+    std::vector<double> decode_plaintext(const Ptxt& p, int slots)
+    {
+        std::vector<double> vec;
+        encoder_->decode(vec, p);
+        if (slots > 0 && static_cast<int>(vec.size()) > slots) {
+            vec.resize(static_cast<size_t>(slots));
+        }
+        return vec;
+    }
+
     Ctxt add(const Ctxt& c1, const Ctxt& c2)
     {
         if (debug_cuda && (c1.depth() != c2.depth() || c1.level() != c2.level())) {
