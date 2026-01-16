@@ -87,6 +87,7 @@ class FHEController {
   public:
     int circuit_depth = 0;
     int num_slots = 0;
+    int full_num_slots = 0;
     int relu_degree = 119;
     std::string weights_dir;
     bool debug_cuda = false;
@@ -123,6 +124,7 @@ class FHEController {
         relu_degree = cfg.relu_degree;
 
         num_slots = static_cast<int>(context_.get_poly_modulus_degree() / 2);
+        full_num_slots = num_slots;
         circuit_depth = context_.get_ciphertext_modulus_count() - 1;
 
         keygen_ = std::make_unique<heongpu::HEKeyGenerator<Scheme>>(context_);
@@ -1649,15 +1651,15 @@ class FHEController {
         if (plaintext_num_slots <= 0) {
             plaintext_num_slots = num_slots;
         }
-        size_t default_slot_num = 32768;
+        const int base_slots = (full_num_slots > 0) ? full_num_slots : num_slots;
         std::vector<double> msg = vec;
         if (static_cast<int>(msg.size()) < plaintext_num_slots) {
             msg.resize(static_cast<size_t>(plaintext_num_slots), 0.0);
         }
-        if (plaintext_num_slots < default_slot_num &&
-            (num_slots % plaintext_num_slots == 0)) {
-            std::vector<double> expanded(static_cast<size_t>(num_slots));
-            for (int i = 0; i < default_slot_num; ++i) {
+        if (plaintext_num_slots < base_slots &&
+            (base_slots % plaintext_num_slots == 0)) {
+            std::vector<double> expanded(static_cast<size_t>(base_slots));
+            for (int i = 0; i < base_slots; ++i) {
                 expanded[static_cast<size_t>(i)] =
                     msg[static_cast<size_t>(i % plaintext_num_slots)];
             }
