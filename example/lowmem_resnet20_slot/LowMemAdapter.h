@@ -725,10 +725,7 @@ namespace lowmem
             }
         std::vector<double> bias_values = utils::read_values_from_file(
             weights_dir + "/conv1bn1-bias.bin", scale);
-        if (debug_cuda && debug_encode)
-        {
-            print_dbg_values(bias_values, 20, "convbn_initial/bias_values");
-        }
+        print_dbg_values(bias_values, 20, "convbn_initial/bias_values");
 
         Ctxt finalsum(context_);
             bool init = false;
@@ -797,10 +794,7 @@ namespace lowmem
                 debug_label = "convbn_initial bias encode";
             }
             Ptxt bias = encode(bias_values, finalsum.depth(), 16384);
-            if (debug_cuda && debug_encode)
-            {
-                print_dbg(bias, 20, "convbn_initial/bias");
-            }
+            print_dbg(bias, 20, "convbn_initial/bias");
 
             finalsum = add_plain(finalsum, bias);
 
