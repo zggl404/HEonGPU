@@ -20,1689 +20,1963 @@
 
 #include "Utils.h"
 
-namespace lowmem {
+namespace lowmem
+{
 
-constexpr auto Scheme = heongpu::Scheme::CKKS;
-using Ctxt = heongpu::Ciphertext<Scheme>;
-using Ptxt = heongpu::Plaintext<Scheme>;
+    constexpr auto Scheme = heongpu::Scheme::CKKS;
+    using Ctxt = heongpu::Ciphertext<Scheme>;
+    using Ptxt = heongpu::Plaintext<Scheme>;
 
-struct HEConfig {
-    size_t poly_modulus_degree = 65536;
-    bool use_manual_moduli = true;
-    std::vector<std::uint64_t> q_modulus_values = {
-        0x10000000006e0001ULL, // 60 Q0
-        0x10000140001ULL, // 40
-        0xffffe80001ULL, // 40
-        0xffffc40001ULL, // 40
-        0x100003e0001ULL, // 40
-        0xffffb20001ULL, // 40
-        0x10000500001ULL, // 40
-        0xffff940001ULL, // 40
-        0xffff8a0001ULL, // 40
-        0xffff820001ULL, // 40
-        0x7fffe60001ULL, // 39 StC
-        0x7fffe40001ULL, // 39 StC
-        0x7fffe00001ULL, // 39 StC
-        0xfffffffff840001ULL, // 60 Sine (double angle)
-        0x1000000000860001ULL, // 60 Sine (double angle)
-        0xfffffffff6a0001ULL, // 60 Sine (double angle)
-        0x1000000000980001ULL, // 60 Sine
-        0xfffffffff5a0001ULL, // 60 Sine
-        0x1000000000b00001ULL, // 60 Sine
-        0x1000000000ce0001ULL, // 60 Sine
-        0xfffffffff2a0001ULL, // 60 Sine
-        0x100000000060001ULL, // 56 CtS
-        0xfffffffff00001ULL, // 56 CtS
-        0xffffffffd80001ULL, // 56 CtS
-        0x1000000002a0001ULL, // 56 CtS
+    struct HEConfig
+    {
+        size_t poly_modulus_degree = 65536;
+        bool use_manual_moduli = true;
+        std::vector<std::uint64_t> q_modulus_values = {
+            0x10000000006e0001ULL, // 60 Q0
+            0x10000140001ULL, // 40
+            0xffffe80001ULL, // 40
+            0xffffc40001ULL, // 40
+            0x100003e0001ULL, // 40
+            0xffffb20001ULL, // 40
+            0x10000500001ULL, // 40
+            0xffff940001ULL, // 40
+            0xffff8a0001ULL, // 40
+            0xffff820001ULL, // 40
+            0x7fffe60001ULL, // 39 StC
+            0x7fffe40001ULL, // 39 StC
+            0x7fffe00001ULL, // 39 StC
+            0xfffffffff840001ULL, // 60 Sine (double angle)
+            0x1000000000860001ULL, // 60 Sine (double angle)
+            0xfffffffff6a0001ULL, // 60 Sine (double angle)
+            0x1000000000980001ULL, // 60 Sine
+            0xfffffffff5a0001ULL, // 60 Sine
+            0x1000000000b00001ULL, // 60 Sine
+            0x1000000000ce0001ULL, // 60 Sine
+            0xfffffffff2a0001ULL, // 60 Sine
+            0x100000000060001ULL, // 56 CtS
+            0xfffffffff00001ULL, // 56 CtS
+            0xffffffffd80001ULL, // 56 CtS
+            0x1000000002a0001ULL, // 56 CtS
+        };
+        std::vector<std::uint64_t> p_modulus_values = {
+            0x1fffffffffe00001ULL, // Pi 61
+            0x1fffffffffc80001ULL, // Pi 61
+            0x1fffffffffb40001ULL, // Pi 61
+            0x1fffffffff500001ULL, // Pi 61
+            0x1fffffffff420001ULL, // Pi 61
+        };
+        std::vector<int> coeff_modulus_bits = {
+            60, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+            50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50};
+        std::vector<int> special_primes_bits = {60, 60, 60};
+        double scale = std::pow(2.0, 40);
+        int secret_key_h = 192;
+        int ephemeral_secret_weight = 32;
+        int boot_stc_level = 12;
+        int boot_eval_level = 20;
+        int boot_cts_level = 24;
+        int relu_degree = 119;
+        int ctos_piece = 3;
+        int stoc_piece = 3;
+        int taylor_number = 11;
+        bool less_key_mode = true;
+        heongpu::keyswitching_type keyswitch =
+            heongpu::keyswitching_type::KEYSWITCHING_METHOD_II;
+        heongpu::sec_level_type sec_level = heongpu::sec_level_type::none;
     };
-    std::vector<std::uint64_t> p_modulus_values = {
-        0x1fffffffffe00001ULL, // Pi 61
-        0x1fffffffffc80001ULL, // Pi 61
-        0x1fffffffffb40001ULL, // Pi 61
-        0x1fffffffff500001ULL, // Pi 61
-        0x1fffffffff420001ULL, // Pi 61
-    };
-    std::vector<int> coeff_modulus_bits = {
-        60, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
-        50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50};
-    std::vector<int> special_primes_bits = {60, 60, 60};
-    double scale = std::pow(2.0, 40);
-    int secret_key_h = 192;
-    int ephemeral_secret_weight = 32;
-    int boot_stc_level = 12;
-    int boot_eval_level = 20;
-    int boot_cts_level = 24;
-    int relu_degree = 119;
-    int ctos_piece = 3;
-    int stoc_piece = 3;
-    int taylor_number = 11;
-    bool less_key_mode = true;
-    heongpu::keyswitching_type keyswitch =
-        heongpu::keyswitching_type::KEYSWITCHING_METHOD_II;
-    heongpu::sec_level_type sec_level = heongpu::sec_level_type::none;
-};
 
-class FHEController {
-  public:
-    int circuit_depth = 0;
-    int num_slots = 0;
-    int full_num_slots = 0;
-    int relu_degree = 119;
-    std::string weights_dir;
-    bool debug_cuda = false;
-    bool debug_encode = false;
-    bool plain_relu = true;
-    bool plain_relu_div_scale = false;
-    std::string debug_label;
-
-    size_t mul_count = 0;
-    size_t rot_count = 0;
-    size_t rescale_count = 0;
-    size_t relin_count = 0;
-    size_t boot_count = 0;
-
-    FHEController()
-        : context_(heongpu::keyswitching_type::KEYSWITCHING_METHOD_II,
-                   heongpu::sec_level_type::none) {}
-
-    void initialize(const HEConfig& cfg)
+    class FHEController
     {
-        context_ = heongpu::HEContext<Scheme>(cfg.keyswitch, cfg.sec_level);
-        context_.set_poly_modulus_degree(cfg.poly_modulus_degree);
-        if (cfg.use_manual_moduli && !cfg.q_modulus_values.empty() &&
-            !cfg.p_modulus_values.empty()) {
-            context_.set_coeff_modulus_values(cfg.q_modulus_values,
-                                              cfg.p_modulus_values);
-        } else {
-            context_.set_coeff_modulus_bit_sizes(cfg.coeff_modulus_bits,
-                                                 cfg.special_primes_bits);
-        }
-        context_.generate();
+      public:
+        int circuit_depth = 0;
+        int num_slots = 0;
+        int full_num_slots = 0;
+        int relu_degree = 119;
+        std::string weights_dir;
+        bool debug_cuda = false;
+        bool debug_encode = false;
+        bool plain_relu = true;
+        bool plain_relu_div_scale = false;
+        std::string debug_label;
 
-        default_scale_ = cfg.scale;
-        relu_degree = cfg.relu_degree;
+        size_t mul_count = 0;
+        size_t rot_count = 0;
+        size_t rescale_count = 0;
+        size_t relin_count = 0;
+        size_t boot_count = 0;
 
-        num_slots = static_cast<int>(context_.get_poly_modulus_degree() / 2);
-        full_num_slots = num_slots;
-        circuit_depth = context_.get_ciphertext_modulus_count() - 1;
-
-        keygen_ = std::make_unique<heongpu::HEKeyGenerator<Scheme>>(context_);
-        secret_key_ = std::make_unique<heongpu::Secretkey<Scheme>>(context_,
-                                                                   cfg.secret_key_h);
-        keygen_->generate_secret_key_v2(*secret_key_);
-
-        public_key_ = std::make_unique<heongpu::Publickey<Scheme>>(context_);
-        keygen_->generate_public_key(*public_key_, *secret_key_);
-
-        relin_key_ = std::make_unique<heongpu::Relinkey<Scheme>>(context_);
-        keygen_->generate_relin_key(*relin_key_, *secret_key_);
-
-        if (cfg.ephemeral_secret_weight > 0) {
-            heongpu::Secretkey<Scheme> sparse_sk(context_,
-                                                 cfg.ephemeral_secret_weight);
-            keygen_->generate_secret_key_v2(sparse_sk);
-
-            swk_dense_to_sparse_ =
-                std::make_unique<heongpu::Switchkey<Scheme>>(context_);
-            keygen_->generate_switch_key(*swk_dense_to_sparse_, sparse_sk,
-                                         *secret_key_);
-
-            swk_sparse_to_dense_ =
-                std::make_unique<heongpu::Switchkey<Scheme>>(context_);
-            keygen_->generate_switch_key(*swk_sparse_to_dense_, *secret_key_,
-                                         sparse_sk);
+        FHEController()
+            : context_(heongpu::keyswitching_type::KEYSWITCHING_METHOD_II,
+                       heongpu::sec_level_type::none)
+        {
         }
 
-        encoder_ = std::make_unique<heongpu::HEEncoder<Scheme>>(context_);
-        encryptor_ =
-            std::make_unique<heongpu::HEEncryptor<Scheme>>(context_,
-                                                           *public_key_);
-        decryptor_ =
-            std::make_unique<heongpu::HEDecryptor<Scheme>>(context_,
-                                                           *secret_key_);
-        operators_ = std::make_unique<heongpu::HEArithmeticOperator<Scheme>>(
-            context_, *encoder_);
-
-        const int q_size = context_.get_ciphertext_modulus_count();
-        if (q_size <= cfg.boot_cts_level) {
-            throw std::runtime_error(
-                "Bootstrapping v2 requires Q_size > 24 for the current "
-                "configuration.");
-        }
-        heongpu::EncodingMatrixConfig stc_cfg(
-            heongpu::LinearTransformType::SLOTS_TO_COEFFS, cfg.boot_stc_level);
-        heongpu::EvalModConfig eval_mod_cfg(cfg.boot_eval_level);
-        heongpu::EncodingMatrixConfig cts_cfg(
-            heongpu::LinearTransformType::COEFFS_TO_SLOTS, cfg.boot_cts_level);
-        heongpu::BootstrappingConfigV2 boot_cfg_v2(stc_cfg, eval_mod_cfg,
-                                                   cts_cfg);
-        operators_->generate_bootstrapping_params_v2(default_scale_,
-                                                     boot_cfg_v2);
-
-        std::vector<int> boot_shifts = operators_->bootstrapping_key_indexs();
-        std::vector<int> shifts = collect_required_shifts();
-        shifts.insert(shifts.end(), boot_shifts.begin(), boot_shifts.end());
-        shifts = unique_sorted(shifts);
-
-        galois_key_ = std::make_unique<heongpu::Galoiskey<Scheme>>(context_,
-                                                                    shifts);
-        keygen_->generate_galois_key(*galois_key_, *secret_key_);
-    }
-
-    double default_scale() const { return default_scale_; }
-
-    Ptxt encode(const std::vector<double>& vec, int target_depth,
-                int plaintext_num_slots)
-    {
-        Ptxt plain = encode_full_with_scale(vec, default_scale_,
-                                            plaintext_num_slots);
-        drop_plain_to_depth(plain, target_depth);
-        check_cuda("encode_plain");
-        return plain;
-    }
-
-    Ptxt encode(double val, int target_depth, int plaintext_num_slots)
-    {
-        if (plaintext_num_slots <= 0) {
-            plaintext_num_slots = num_slots;
-        }
-        std::vector<double> vec(static_cast<size_t>(plaintext_num_slots), val);
-        return encode(vec, target_depth, plaintext_num_slots);
-    }
-
-    Ctxt encrypt(const std::vector<double>& vec, int target_depth = 0,
-                 int plaintext_num_slots = 0)
-    {
-        Ptxt p = encode_full(vec, plaintext_num_slots);
-        Ctxt c(context_);
-        encryptor_->encrypt(c, p);
-        check_cuda("encrypt");
-        if (target_depth > 0) {
-            drop_to_depth(c, target_depth);
-        }
-        check_cuda("drop_to_depth");
-        return c;
-    }
-
-    Ctxt encrypt_ptxt(Ptxt& p)
-    {
-        Ctxt c(context_);
-        encryptor_->encrypt(c, p);
-        return c;
-    }
-
-    Ptxt decrypt(const Ctxt& c)
-    {
-        Ptxt p(context_);
-        decryptor_->decrypt(p, const_cast<Ctxt&>(c));
-        return p;
-    }
-
-    std::vector<double> decrypt_tovector(const Ctxt& c, int slots)
-    {
-        Ptxt p(context_);
-        decryptor_->decrypt(p, const_cast<Ctxt&>(c));
-        std::vector<double> vec;
-        encoder_->decode(vec, p);
-        if (slots > 0 && static_cast<int>(vec.size()) > slots) {
-            vec.resize(static_cast<size_t>(slots));
-        }
-        return vec;
-    }
-
-    std::vector<double> decode_plaintext(const Ptxt& p, int slots)
-    {
-        std::vector<double> vec;
-        encoder_->decode(vec, p);
-        if (slots > 0 && static_cast<int>(vec.size()) > slots) {
-            vec.resize(static_cast<size_t>(slots));
-        }
-        return vec;
-    }
-
-    Ctxt add(const Ctxt& c1, const Ctxt& c2)
-    {
-        if (debug_cuda && (c1.depth() != c2.depth() || c1.level() != c2.level())) {
-            std::cerr << "add depth/level mismatch c1 depth=" << c1.depth()
-                      << " level=" << c1.level()
-                      << " c2 depth=" << c2.depth()
-                      << " level=" << c2.level();
-            if (!debug_label.empty()) {
-                std::cerr << " [" << debug_label << "]";
+        void initialize(const HEConfig& cfg)
+        {
+            context_ = heongpu::HEContext<Scheme>(cfg.keyswitch, cfg.sec_level);
+            context_.set_poly_modulus_degree(cfg.poly_modulus_degree);
+            if (cfg.use_manual_moduli && !cfg.q_modulus_values.empty() &&
+                !cfg.p_modulus_values.empty())
+            {
+                context_.set_coeff_modulus_values(cfg.q_modulus_values,
+                                                  cfg.p_modulus_values);
             }
-            std::cerr << std::endl;
-        }
-        Ctxt lhs = c1;
-        Ctxt rhs = c2;
-        if (lhs.depth() != rhs.depth()) {
-            int target_depth = std::max(lhs.depth(), rhs.depth());
-            if (lhs.depth() < target_depth) {
-                drop_to_depth(lhs, target_depth);
+            else
+            {
+                context_.set_coeff_modulus_bit_sizes(cfg.coeff_modulus_bits,
+                                                     cfg.special_primes_bits);
             }
-            if (rhs.depth() < target_depth) {
-                drop_to_depth(rhs, target_depth);
-            }
-            if (debug_cuda) {
-                std::cerr << "add aligned depths lhs=" << lhs.depth()
-                          << " rhs=" << rhs.depth() << std::endl;
-            }
-        }
-        Ctxt out(context_);
-        try {
-            operators_->add(lhs, rhs, out);
-        } catch (const std::exception& ex) {
-            report_exception("add", ex);
-            throw;
-        }
-        check_cuda("add");
-        return out;
-    }
+            context_.generate();
 
-    Ctxt add_plain(const Ctxt& c, const Ptxt& p)
-    {
-        if (debug_cuda && p.depth() != c.depth()) {
-            std::cerr << "add_plain depth mismatch c=" << c.depth()
-                      << " p=" << p.depth();
-            if (!debug_label.empty()) {
-                std::cerr << " [" << debug_label << "]";
-            }
-            std::cerr << std::endl;
-        }
-        Ctxt out(context_);
-        try {
-            operators_->add_plain(const_cast<Ctxt&>(c), const_cast<Ptxt&>(p),
-                                  out);
-        } catch (const std::exception& ex) {
-            report_exception("add_plain", ex);
-            throw;
-        }
-        check_cuda("add_plain");
-        return out;
-    }
+            default_scale_ = cfg.scale;
+            relu_degree = cfg.relu_degree;
 
-    Ctxt mult(const Ctxt& c, double d)
-    {
-        Ctxt out(context_);
-        try {
-            operators_->multiply_plain(const_cast<Ctxt&>(c), d, out, c.scale());
-            operators_->rescale_inplace(out);
-        } catch (const std::exception& ex) {
-            report_exception("mult_const", ex);
-            throw;
-        }
-        mul_count++;
-        rescale_count++;
-        check_cuda("mult_const");
-        return out;
-    }
+            num_slots =
+                static_cast<int>(context_.get_poly_modulus_degree() / 2);
+            full_num_slots = num_slots;
+            circuit_depth = context_.get_ciphertext_modulus_count() - 1;
 
-    Ctxt mult(const Ctxt& c, const Ptxt& p)
-    {
-        Ctxt lhs = c;
-        Ptxt rhs = p;
-        if (lhs.depth() != rhs.depth()) {
-            int target_depth = std::max(lhs.depth(), rhs.depth());
-            if (lhs.depth() < target_depth) {
-                drop_to_depth(lhs, target_depth);
-            }
-            if (rhs.depth() < target_depth) {
-                drop_plain_to_depth(rhs, target_depth);
-            }
-            if (debug_cuda) {
-                std::cerr << "mult_plain aligned depths c=" << lhs.depth()
-                          << " p=" << rhs.depth() << std::endl;
-            }
-        }
-        Ctxt out(context_);
-        try {
-            operators_->multiply_plain(lhs, rhs, out);
-            operators_->rescale_inplace(out);
-        } catch (const std::exception& ex) {
-            report_exception("mult_plain", ex);
-            throw;
-        }
-        mul_count++;
-        rescale_count++;
-        check_cuda("mult_plain");
-        return out;
-    }
+            keygen_ =
+                std::make_unique<heongpu::HEKeyGenerator<Scheme>>(context_);
+            secret_key_ = std::make_unique<heongpu::Secretkey<Scheme>>(
+                context_, cfg.secret_key_h);
+            keygen_->generate_secret_key_v2(*secret_key_);
 
-    Ctxt mult_mask(const Ctxt& c, const Ptxt& p)
-    {
-        Ctxt out = c;
-        Ptxt rhs = p;
-        if (out.depth() != rhs.depth()) {
-            int target_depth = std::max(out.depth(), rhs.depth());
-            if (out.depth() < target_depth) {
-                drop_to_depth(out, target_depth);
-            }
-            if (rhs.depth() < target_depth) {
-                drop_plain_to_depth(rhs, target_depth);
-            }
-            if (debug_cuda) {
-                std::cerr << "mult_mask aligned depths c=" << out.depth()
-                          << " p=" << rhs.depth() << std::endl;
-            }
-        }
-        try {
-            operators_->multiply_plain_mask_inplace(out, rhs);
-        } catch (const std::exception& ex) {
-            report_exception("mult_mask", ex);
-            throw;
-        }
-        mul_count++;
-        check_cuda("mult_mask");
-        return out;
-    }
+            public_key_ =
+                std::make_unique<heongpu::Publickey<Scheme>>(context_);
+            keygen_->generate_public_key(*public_key_, *secret_key_);
 
-    Ctxt rotate_vector(const Ctxt& c, int steps)
-    {
-        
-        Ctxt out(context_);
-        try {
-            operators_->rotate_rows(const_cast<Ctxt&>(c), out, *galois_key_,
-                                    steps);
-        } catch (const std::exception& ex) {
-            report_exception("rotate", ex);
-            throw;
-        }
-        rot_count++;
-        check_cuda("rotate");
-        return out;
-    }
+            relin_key_ = std::make_unique<heongpu::Relinkey<Scheme>>(context_);
+            keygen_->generate_relin_key(*relin_key_, *secret_key_);
 
-    Ctxt bootstrap(const Ctxt& c, bool timing = false)
-    {
-        auto start = utils::start_time();
-        if (debug_cuda) {
-            std::cout << "bootstrap input depth=" << c.depth()
-                      << " level=" << c.level()
-                      << " scale=" << c.scale()
-                      << " rescale_required=" << c.rescale_required()
-                      << std::endl;
+            if (cfg.ephemeral_secret_weight > 0)
+            {
+                heongpu::Secretkey<Scheme> sparse_sk(
+                    context_, cfg.ephemeral_secret_weight);
+                keygen_->generate_secret_key_v2(sparse_sk);
+
+                swk_dense_to_sparse_ =
+                    std::make_unique<heongpu::Switchkey<Scheme>>(context_);
+                keygen_->generate_switch_key(*swk_dense_to_sparse_, sparse_sk,
+                                             *secret_key_);
+
+                swk_sparse_to_dense_ =
+                    std::make_unique<heongpu::Switchkey<Scheme>>(context_);
+                keygen_->generate_switch_key(*swk_sparse_to_dense_,
+                                             *secret_key_, sparse_sk);
+            }
+
+            encoder_ = std::make_unique<heongpu::HEEncoder<Scheme>>(context_);
+            encryptor_ = std::make_unique<heongpu::HEEncryptor<Scheme>>(
+                context_, *public_key_);
+            decryptor_ = std::make_unique<heongpu::HEDecryptor<Scheme>>(
+                context_, *secret_key_);
+            operators_ =
+                std::make_unique<heongpu::HEArithmeticOperator<Scheme>>(
+                    context_, *encoder_);
+
+            const int q_size = context_.get_ciphertext_modulus_count();
+            if (q_size <= cfg.boot_cts_level)
+            {
+                throw std::runtime_error(
+                    "Bootstrapping v2 requires Q_size > 24 for the current "
+                    "configuration.");
+            }
+            heongpu::EncodingMatrixConfig stc_cfg(
+                heongpu::LinearTransformType::SLOTS_TO_COEFFS,
+                cfg.boot_stc_level);
+            heongpu::EvalModConfig eval_mod_cfg(cfg.boot_eval_level);
+            heongpu::EncodingMatrixConfig cts_cfg(
+                heongpu::LinearTransformType::COEFFS_TO_SLOTS,
+                cfg.boot_cts_level);
+            heongpu::BootstrappingConfigV2 boot_cfg_v2(stc_cfg, eval_mod_cfg,
+                                                       cts_cfg);
+            operators_->generate_bootstrapping_params_v2(default_scale_,
+                                                         boot_cfg_v2);
+
+            std::vector<int> boot_shifts =
+                operators_->bootstrapping_key_indexs();
+            std::vector<int> shifts = collect_required_shifts();
+            shifts.insert(shifts.end(), boot_shifts.begin(), boot_shifts.end());
+            shifts = unique_sorted(shifts);
+
+            galois_key_ =
+                std::make_unique<heongpu::Galoiskey<Scheme>>(context_, shifts);
+            keygen_->generate_galois_key(*galois_key_, *secret_key_);
         }
-        Ctxt tmp = c;
-        while (tmp.rescale_required()) {
-            operators_->rescale_inplace(tmp);
-            if (debug_cuda) {
-                std::cout << "bootstrap rescale depth=" << tmp.depth()
+
+        double default_scale() const { return default_scale_; }
+
+        Ptxt encode(const std::vector<double>& vec, int target_depth,
+                    int plaintext_num_slots)
+        {
+            Ptxt plain = encode_full_with_scale(vec, default_scale_,
+                                                plaintext_num_slots);
+            drop_plain_to_depth(plain, target_depth);
+            check_cuda("encode_plain");
+            return plain;
+        }
+
+        Ptxt encode(double val, int target_depth, int plaintext_num_slots)
+        {
+            if (plaintext_num_slots <= 0)
+            {
+                plaintext_num_slots = num_slots;
+            }
+            std::vector<double> vec(static_cast<size_t>(plaintext_num_slots),
+                                    val);
+            return encode(vec, target_depth, plaintext_num_slots);
+        }
+
+        Ctxt encrypt(const std::vector<double>& vec, int target_depth = 0,
+                     int plaintext_num_slots = 0)
+        {
+            Ptxt p = encode_full(vec, plaintext_num_slots);
+            Ctxt c(context_);
+            encryptor_->encrypt(c, p);
+            check_cuda("encrypt");
+            if (target_depth > 0)
+            {
+                drop_to_depth(c, target_depth);
+            }
+            check_cuda("drop_to_depth");
+            return c;
+        }
+
+        Ctxt encrypt_ptxt(Ptxt& p)
+        {
+            Ctxt c(context_);
+            encryptor_->encrypt(c, p);
+            return c;
+        }
+
+        Ptxt decrypt(const Ctxt& c)
+        {
+            Ptxt p(context_);
+            decryptor_->decrypt(p, const_cast<Ctxt&>(c));
+            return p;
+        }
+
+        std::vector<double> decrypt_tovector(const Ctxt& c, int slots)
+        {
+            Ptxt p(context_);
+            decryptor_->decrypt(p, const_cast<Ctxt&>(c));
+            std::vector<double> vec;
+            encoder_->decode(vec, p);
+            if (slots > 0 && static_cast<int>(vec.size()) > slots)
+            {
+                vec.resize(static_cast<size_t>(slots));
+            }
+            return vec;
+        }
+
+        std::vector<double> decode_plaintext(const Ptxt& p, int slots)
+        {
+            std::vector<double> vec;
+            encoder_->decode(vec, p);
+            if (slots > 0 && static_cast<int>(vec.size()) > slots)
+            {
+                vec.resize(static_cast<size_t>(slots));
+            }
+            return vec;
+        }
+
+        Ctxt add(const Ctxt& c1, const Ctxt& c2)
+        {
+            if (debug_cuda &&
+                (c1.depth() != c2.depth() || c1.level() != c2.level()))
+            {
+                std::cerr << "add depth/level mismatch c1 depth=" << c1.depth()
+                          << " level=" << c1.level()
+                          << " c2 depth=" << c2.depth()
+                          << " level=" << c2.level();
+                if (!debug_label.empty())
+                {
+                    std::cerr << " [" << debug_label << "]";
+                }
+                std::cerr << std::endl;
+            }
+            Ctxt lhs = c1;
+            Ctxt rhs = c2;
+            if (lhs.depth() != rhs.depth())
+            {
+                int target_depth = std::max(lhs.depth(), rhs.depth());
+                if (lhs.depth() < target_depth)
+                {
+                    drop_to_depth(lhs, target_depth);
+                }
+                if (rhs.depth() < target_depth)
+                {
+                    drop_to_depth(rhs, target_depth);
+                }
+                if (debug_cuda)
+                {
+                    std::cerr << "add aligned depths lhs=" << lhs.depth()
+                              << " rhs=" << rhs.depth() << std::endl;
+                }
+            }
+            Ctxt out(context_);
+            try
+            {
+                operators_->add(lhs, rhs, out);
+            }
+            catch (const std::exception& ex)
+            {
+                report_exception("add", ex);
+                throw;
+            }
+            check_cuda("add");
+            return out;
+        }
+
+        Ctxt add_plain(const Ctxt& c, const Ptxt& p)
+        {
+            if (debug_cuda && p.depth() != c.depth())
+            {
+                std::cerr << "add_plain depth mismatch c=" << c.depth()
+                          << " p=" << p.depth();
+                if (!debug_label.empty())
+                {
+                    std::cerr << " [" << debug_label << "]";
+                }
+                std::cerr << std::endl;
+            }
+            Ctxt out(context_);
+            try
+            {
+                operators_->add_plain(const_cast<Ctxt&>(c),
+                                      const_cast<Ptxt&>(p), out);
+            }
+            catch (const std::exception& ex)
+            {
+                report_exception("add_plain", ex);
+                throw;
+            }
+            check_cuda("add_plain");
+            return out;
+        }
+
+        Ctxt mult(const Ctxt& c, double d)
+        {
+            Ctxt out(context_);
+            try
+            {
+                operators_->multiply_plain(const_cast<Ctxt&>(c), d, out,
+                                           c.scale());
+                operators_->rescale_inplace(out);
+            }
+            catch (const std::exception& ex)
+            {
+                report_exception("mult_const", ex);
+                throw;
+            }
+            mul_count++;
+            rescale_count++;
+            check_cuda("mult_const");
+            return out;
+        }
+
+        Ctxt mult(const Ctxt& c, const Ptxt& p)
+        {
+            Ctxt lhs = c;
+            Ptxt rhs = p;
+            if (lhs.depth() != rhs.depth())
+            {
+                int target_depth = std::max(lhs.depth(), rhs.depth());
+                if (lhs.depth() < target_depth)
+                {
+                    drop_to_depth(lhs, target_depth);
+                }
+                if (rhs.depth() < target_depth)
+                {
+                    drop_plain_to_depth(rhs, target_depth);
+                }
+                if (debug_cuda)
+                {
+                    std::cerr << "mult_plain aligned depths c=" << lhs.depth()
+                              << " p=" << rhs.depth() << std::endl;
+                }
+            }
+            Ctxt out(context_);
+            try
+            {
+                operators_->multiply_plain(lhs, rhs, out);
+                operators_->rescale_inplace(out);
+            }
+            catch (const std::exception& ex)
+            {
+                report_exception("mult_plain", ex);
+                throw;
+            }
+            mul_count++;
+            rescale_count++;
+            check_cuda("mult_plain");
+            return out;
+        }
+
+        Ctxt mult_mask(const Ctxt& c, const Ptxt& p)
+        {
+            Ctxt out = c;
+            Ptxt rhs = p;
+            if (out.depth() != rhs.depth())
+            {
+                int target_depth = std::max(out.depth(), rhs.depth());
+                if (out.depth() < target_depth)
+                {
+                    drop_to_depth(out, target_depth);
+                }
+                if (rhs.depth() < target_depth)
+                {
+                    drop_plain_to_depth(rhs, target_depth);
+                }
+                if (debug_cuda)
+                {
+                    std::cerr << "mult_mask aligned depths c=" << out.depth()
+                              << " p=" << rhs.depth() << std::endl;
+                }
+            }
+            try
+            {
+                operators_->multiply_plain_mask_inplace(out, rhs);
+            }
+            catch (const std::exception& ex)
+            {
+                report_exception("mult_mask", ex);
+                throw;
+            }
+            mul_count++;
+            check_cuda("mult_mask");
+            return out;
+        }
+
+        Ctxt rotate_vector(const Ctxt& c, int steps)
+        {
+            Ctxt out(context_);
+            try
+            {
+                operators_->rotate_rows(const_cast<Ctxt&>(c), out, *galois_key_,
+                                        steps);
+            }
+            catch (const std::exception& ex)
+            {
+                report_exception("rotate", ex);
+                throw;
+            }
+            rot_count++;
+            check_cuda("rotate");
+            return out;
+        }
+
+        Ctxt bootstrap(const Ctxt& c, bool timing = false)
+        {
+            auto start = utils::start_time();
+            if (debug_cuda)
+            {
+                std::cout << "bootstrap input depth=" << c.depth()
+                          << " level=" << c.level() << " scale=" << c.scale()
+                          << " rescale_required=" << c.rescale_required()
+                          << std::endl;
+            }
+            Ctxt tmp = c;
+            while (tmp.rescale_required())
+            {
+                operators_->rescale_inplace(tmp);
+                if (debug_cuda)
+                {
+                    std::cout << "bootstrap rescale depth=" << tmp.depth()
+                              << " level=" << tmp.level()
+                              << " scale=" << tmp.scale()
+                              << " rescale_required=" << tmp.rescale_required()
+                              << std::endl;
+                }
+            }
+            drop_to_depth(tmp, context_.get_ciphertext_modulus_count() - 1);
+            while (tmp.rescale_required())
+            {
+                operators_->rescale_inplace(tmp);
+                if (debug_cuda)
+                {
+                    std::cout
+                        << "bootstrap rescale (post-drop) depth=" << tmp.depth()
+                        << " level=" << tmp.level() << " scale=" << tmp.scale()
+                        << " rescale_required=" << tmp.rescale_required()
+                        << std::endl;
+                }
+            }
+            if (debug_cuda)
+            {
+                std::cout << "bootstrap pre-v2 depth=" << tmp.depth()
                           << " level=" << tmp.level()
                           << " scale=" << tmp.scale()
                           << " rescale_required=" << tmp.rescale_required()
                           << std::endl;
             }
-        }
-        drop_to_depth(tmp, context_.get_ciphertext_modulus_count() - 1);
-        while (tmp.rescale_required()) {
-            operators_->rescale_inplace(tmp);
-            if (debug_cuda) {
-                std::cout << "bootstrap rescale (post-drop) depth="
-                          << tmp.depth() << " level=" << tmp.level()
-                          << " scale=" << tmp.scale()
-                          << " rescale_required=" << tmp.rescale_required()
-                          << std::endl;
-            }
-        }
-        if (debug_cuda) {
-            std::cout << "bootstrap pre-v2 depth=" << tmp.depth()
-                      << " level=" << tmp.level()
-                      << " scale=" << tmp.scale()
-                      << " rescale_required=" << tmp.rescale_required()
-                      << std::endl;
-        }
-        Ctxt out(context_);
-        try {
-            out = operators_->regular_bootstrapping_v2(
-                tmp, *galois_key_, *relin_key_, swk_dense_to_sparse_.get(),
-                swk_sparse_to_dense_.get());
-        } catch (const std::exception& ex) {
-            report_exception("bootstrap", ex);
-            throw;
-        }
-        if (debug_cuda) {
-            std::cout << "bootstrap output depth=" << out.depth()
-                      << " level=" << out.level()
-                      << " scale=" << out.scale() << std::endl;
-        }
-        boot_count++;
-        check_cuda("bootstrap");
-        if (timing) {
-            utils::print_duration(start, "Bootstrapping");
-        }
-        return out;
-    }
-
-    Ctxt relu(const Ctxt& c, double scale, bool timing = false)
-    {
-        auto start = utils::start_time();
-        if (debug_cuda) {
-            std::cout << "relu input depth=" << c.depth()
-                      << " level=" << c.level()
-                      << " scale=" << c.scale() << std::endl;
-        }
-        if (plain_relu) {
-            Ptxt p = decrypt(c);
-            std::vector<double> vals;
-            encoder_->decode(vals, p);
-            for (double& v : vals) {
-                v = (v > 0.0) ? v : 0.0;
-            }
-            Ptxt p_out(context_);
-            encoder_->encode(p_out, vals, c.scale());
             Ctxt out(context_);
-            encryptor_->encrypt(out, p_out);
-            drop_to_depth(out, c.depth());
-            if (timing) {
-                utils::print_duration(start, "ReLU plaintext");
+            try
+            {
+                out = operators_->regular_bootstrapping_v2(
+                    tmp, *galois_key_, *relin_key_, swk_dense_to_sparse_.get(),
+                    swk_sparse_to_dense_.get());
+            }
+            catch (const std::exception& ex)
+            {
+                report_exception("bootstrap", ex);
+                throw;
+            }
+            if (debug_cuda)
+            {
+                std::cout << "bootstrap output depth=" << out.depth()
+                          << " level=" << out.level()
+                          << " scale=" << out.scale() << std::endl;
+            }
+            boot_count++;
+            check_cuda("bootstrap");
+            if (timing)
+            {
+                utils::print_duration(start, "Bootstrapping");
             }
             return out;
         }
-        std::vector<double> coeffs = relu_coefficients(scale, relu_degree);
-        Ctxt out(context_);
-        try {
-            out = operators_->evaluate_poly_monomial(const_cast<Ctxt&>(c),
-                                                     c.scale(), coeffs,
-                                                     *relin_key_);
-        } catch (const std::exception& ex) {
-            report_exception("relu_poly", ex);
-            throw;
-        }
-        check_cuda("relu_poly");
-        if (timing) {
-            utils::print_duration(start,
-                                  "ReLU d = " + std::to_string(relu_degree));
-        }
-        return out;
-    }
 
-    void print(const Ctxt& c, int slots, const std::string& prefix)
-    {
-        std::vector<double> v = decrypt_tovector(c, slots);
-        std::cout << prefix << "[ ";
-        std::cout << std::fixed << std::setprecision(3);
-        for (int i = 0; i < slots; i++) {
-            double val = v[static_cast<size_t>(i)];
-            std::string sign = val >= 0 ? " " : "-";
-            if (val < 0) {
-                val = -val;
+        Ctxt relu(const Ctxt& c, double scale, bool timing = false)
+        {
+            auto start = utils::start_time();
+            if (debug_cuda)
+            {
+                std::cout << "relu input depth=" << c.depth()
+                          << " level=" << c.level() << " scale=" << c.scale()
+                          << std::endl;
             }
-            if (i == slots - 1) {
-                std::cout << sign << val << " ]";
-            } else {
-                if (std::abs(val) < 1e-8) {
-                    std::cout << " 0.0000000000" << ", ";
-                } else {
-                    std::cout << sign << val << ", ";
+            if (plain_relu)
+            {
+                Ptxt p = decrypt(c);
+                std::vector<double> vals;
+                encoder_->decode(vals, p);
+                for (double& v : vals)
+                {
+                    v = (v > 0.0) ? v : 0.0;
+                }
+                Ptxt p_out(context_);
+                encoder_->encode(p_out, vals, c.scale());
+                Ctxt out(context_);
+                encryptor_->encrypt(out, p_out);
+                drop_to_depth(out, c.depth());
+                if (timing)
+                {
+                    utils::print_duration(start, "ReLU plaintext");
+                }
+                return out;
+            }
+            std::vector<double> coeffs = relu_coefficients(scale, relu_degree);
+            Ctxt out(context_);
+            try
+            {
+                out = operators_->evaluate_poly_monomial(
+                    const_cast<Ctxt&>(c), c.scale(), coeffs, *relin_key_);
+            }
+            catch (const std::exception& ex)
+            {
+                report_exception("relu_poly", ex);
+                throw;
+            }
+            check_cuda("relu_poly");
+            if (timing)
+            {
+                utils::print_duration(start, "ReLU d = " +
+                                                 std::to_string(relu_degree));
+            }
+            return out;
+        }
+
+        void print(const Ctxt& c, int slots, const std::string& prefix)
+        {
+            std::vector<double> v = decrypt_tovector(c, slots);
+            std::cout << prefix << "[ ";
+            std::cout << std::fixed << std::setprecision(3);
+            for (int i = 0; i < slots; i++)
+            {
+                double val = v[static_cast<size_t>(i)];
+                std::string sign = val >= 0 ? " " : "-";
+                if (val < 0)
+                {
+                    val = -val;
+                }
+                if (i == slots - 1)
+                {
+                    std::cout << sign << val << " ]";
+                }
+                else
+                {
+                    if (std::abs(val) < 1e-8)
+                    {
+                        std::cout << " 0.0000000000" << ", ";
+                    }
+                    else
+                    {
+                        std::cout << sign << val << ", ";
+                    }
                 }
             }
+            std::cout << std::endl;
         }
-        std::cout << std::endl;
-    }
 
-    void print_dbg(const Ctxt& c, int slots, const std::string& tag)
-    {
-        std::vector<double> v = decrypt_tovector(c, slots);
-        const int limit =
-            std::min(slots, static_cast<int>(v.size()));
-        std::printf("[DBG] %s: [ ", tag.c_str());
-        for (int i = 0; i < limit; i++) {
-            std::printf("%7.3f", v[static_cast<size_t>(i)]);
-            if (i + 1 < limit) {
-                std::printf(", ");
-            }
-        }
-        std::printf(" ]\n");
-        std::printf("[DBG_META] %s level=%d scale=%.6e\n", tag.c_str(),
-                    c.level(), c.scale());
-    }
-
-    void print_min_max(const Ctxt& c)
-    {
-        std::vector<double> v = decrypt_tovector(c, num_slots);
-        auto minmax = std::minmax_element(v.begin(), v.end());
-        std::cout << "min: " << *minmax.first << ", max: " << *minmax.second
-                  << std::endl;
-    }
-
-    double scale(const Ctxt& c) const { return c.scale(); }
-
-    int level(const Ctxt& c) const { return c.level(); }
-
-    void print_level_scale(const Ctxt& c, const std::string& label) const
-    {
-        std::cout << label << " level=" << c.level() << " scale=" << c.scale()
-                  << std::endl;
-    }
-
-    // CNN functions
-    Ctxt convbn_initial(const Ctxt& in, double scale = 0.5,
-                        bool timing = false)
-    {
-        auto start = utils::start_time();
-
-        const int saved_slots = num_slots;
-        num_slots = 16384;
-
-        int img_width = 32;
-        int padding = 1;
-
-        std::vector<Ctxt> c_rotations;
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -padding), -img_width));
-        c_rotations.push_back(rotate_vector(in, -img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, padding), -img_width));
-        c_rotations.push_back(rotate_vector(in, -padding));
-        c_rotations.push_back(in);
-        c_rotations.push_back(rotate_vector(in, padding));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -padding), img_width));
-        c_rotations.push_back(rotate_vector(in, img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, padding), img_width));
-
-        if (debug_cuda) {
-            debug_label = "convbn_initial bias encode";
-        }
-        std::vector<double> bias_values = utils::read_values_from_file(
-            weights_dir + "/conv1bn1-bias.bin", scale);
-
-        Ctxt finalsum(context_);
-        bool init = false;
-
-        for (int j = 0; j < 16; j++) {
-            std::vector<Ctxt> k_rows;
-            k_rows.reserve(9);
-            for (int k = 0; k < 9; k++) {
-                if (debug_cuda) {
-                    debug_label = "convbn_initial ch=" + std::to_string(j) +
-                                  " k=" + std::to_string(k + 1) + " encode";
+        void print_dbg(const Ctxt& c, int slots, const std::string& tag)
+        {
+            std::vector<double> v = decrypt_tovector(c, slots);
+            const int limit = std::min(slots, static_cast<int>(v.size()));
+            std::printf("[DBG] %s: [ ", tag.c_str());
+            for (int i = 0; i < limit; i++)
+            {
+                std::printf("%7.3f", v[static_cast<size_t>(i)]);
+                if (i + 1 < limit)
+                {
+                    std::printf(", ");
                 }
-                std::vector<double> values = utils::read_values_from_file(
-                    weights_dir + "/conv1bn1-ch" + std::to_string(j) + "-k" +
-                        std::to_string(k + 1) + ".bin",
-                    scale);
-                Ptxt encoded = encode(values, in.depth(), 16384);
-                if (debug_cuda) {
-                    debug_label = "convbn_initial ch=" + std::to_string(j) +
-                                  " k=" + std::to_string(k + 1) + " mult";
+            }
+            std::printf(" ]\n");
+            std::printf("[DBG_META] %s level=%d scale=%.6e\n", tag.c_str(),
+                        c.level(), c.scale());
+        }
+
+        void print_dbg(const Ptxt& p, int slots, const std::string& tag)
+        {
+            std::vector<double> v = decode_plaintext(p, slots);
+            const int limit = std::min(slots, static_cast<int>(v.size()));
+            std::printf("[DBG] %s: [ ", tag.c_str());
+            for (int i = 0; i < limit; i++)
+            {
+                std::printf("%7.3f", v[static_cast<size_t>(i)]);
+                if (i + 1 < limit)
+                {
+                    std::printf(", ");
                 }
-                k_rows.push_back(mult(c_rotations[k], encoded));
             }
+            std::printf(" ]\n");
+            std::printf("[DBG_META] %s depth=%d scale=%.6e\n", tag.c_str(),
+                        p.depth(), p.scale());
+        }
+        
+        void print_min_max(const Ctxt& c)
+        {
+            std::vector<double> v = decrypt_tovector(c, num_slots);
+            auto minmax = std::minmax_element(v.begin(), v.end());
+            std::cout << "min: " << *minmax.first << ", max: " << *minmax.second
+                      << std::endl;
+        }
 
-            Ctxt sum = k_rows[0];
-            for (size_t i = 1; i < k_rows.size(); i++) {
-                sum = add(sum, k_rows[i]);
+        double scale(const Ctxt& c) const { return c.scale(); }
+
+        int level(const Ctxt& c) const { return c.level(); }
+
+        void print_level_scale(const Ctxt& c, const std::string& label) const
+        {
+            std::cout << label << " level=" << c.level()
+                      << " scale=" << c.scale() << std::endl;
+        }
+
+        // CNN functions
+        Ctxt convbn_initial(const Ctxt& in, double scale = 0.5,
+                            bool timing = false)
+        {
+            auto start = utils::start_time();
+
+            const int saved_slots = num_slots;
+            num_slots = 16384;
+
+            int img_width = 32;
+            int padding = 1;
+
+            std::vector<Ctxt> c_rotations;
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -padding), -img_width));
+            c_rotations.push_back(rotate_vector(in, -img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, padding), -img_width));
+            c_rotations.push_back(rotate_vector(in, -padding));
+            c_rotations.push_back(in);
+            c_rotations.push_back(rotate_vector(in, padding));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -padding), img_width));
+            c_rotations.push_back(rotate_vector(in, img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, padding), img_width));
+
+            if (debug_cuda)
+            {
+                debug_label = "convbn_initial bias encode";
             }
-
-            print_dbg(sum, 20, "Initial layer convbn_initial/j" +
-                                  std::to_string(j) + "/sum (post)");
-
-            Ctxt res = add(sum, rotate_vector(sum, 1024));
-            res = add(res, rotate_vector(rotate_vector(sum, 1024), 1024));
-            print_dbg(res, 20, "Initial layer convbn_initial/j" +
-                                  std::to_string(j) + "/res (pre-mask)");
-            res = mult(res, mask_from_to(0, 1024, res.depth()));
-            print_dbg(res, 20, "Initial layer convbn_initial/j" +
-                                  std::to_string(j) + "/res (post-mask)");
-
-            if (!init) {
-                finalsum = rotate_vector(res, 1024);
-                init = true;
-            } else {
-                finalsum = add(finalsum, res);
-                finalsum = rotate_vector(finalsum, 1024);
-            }
-            print_dbg(finalsum, 20, "Initial layer convbn_initial/j" +
-                                       std::to_string(j) +
-                                       "/finalsum (post)");
+            std::vector<double> bias_values = utils::read_values_from_file(
+                weights_dir + "/conv1bn1-bias.bin", scale);
             
+            Ctxt finalsum(context_);
+            bool init = false;
+
+            for (int j = 0; j < 16; j++)
+            {
+                std::vector<Ctxt> k_rows;
+                k_rows.reserve(9);
+                for (int k = 0; k < 9; k++)
+                {
+                    if (debug_cuda)
+                    {
+                        debug_label = "convbn_initial ch=" + std::to_string(j) +
+                                      " k=" + std::to_string(k + 1) + " encode";
+                    }
+                    std::vector<double> values = utils::read_values_from_file(
+                        weights_dir + "/conv1bn1-ch" + std::to_string(j) +
+                            "-k" + std::to_string(k + 1) + ".bin",
+                        scale);
+                    Ptxt encoded = encode(values, in.depth(), 16384);
+                    if (debug_cuda)
+                    {
+                        debug_label = "convbn_initial ch=" + std::to_string(j) +
+                                      " k=" + std::to_string(k + 1) + " mult";
+                    }
+                    k_rows.push_back(mult(c_rotations[k], encoded));
+                }
+
+                Ctxt sum = k_rows[0];
+                for (size_t i = 1; i < k_rows.size(); i++)
+                {
+                    sum = add(sum, k_rows[i]);
+                }
+
+                print_dbg(sum, 20,
+                          "Initial layer convbn_initial/j" + std::to_string(j) +
+                              "/sum (post)");
+
+                Ctxt res = add(sum, rotate_vector(sum, 1024));
+                res = add(res, rotate_vector(rotate_vector(sum, 1024), 1024));
+                print_dbg(res, 20,
+                          "Initial layer convbn_initial/j" + std::to_string(j) +
+                              "/res (pre-mask)");
+                res = mult(res, mask_from_to(0, 1024, res.depth()));
+                print_dbg(res, 20,
+                          "Initial layer convbn_initial/j" + std::to_string(j) +
+                              "/res (post-mask)");
+
+                if (!init)
+                {
+                    finalsum = rotate_vector(res, 1024);
+                    init = true;
+                }
+                else
+                {
+                    finalsum = add(finalsum, res);
+                    finalsum = rotate_vector(finalsum, 1024);
+                }
+                print_dbg(finalsum, 20,
+                          "Initial layer convbn_initial/j" + std::to_string(j) +
+                              "/finalsum (post)");
+            }
+
+            if (debug_cuda)
+            {
+                debug_label = "convbn_initial bias encode";
+            }
+            Ptxt bias = encode(bias_values, finalsum.depth(), 16384);
+            if (debug_cuda && debug_encode)
+            {
+                print_dbg(bias, 20, "convbn_initial/bias");
+            }
+
+            finalsum = add_plain(finalsum, bias);
+
+            if (timing)
+            {
+                utils::print_duration(start, "Initial layer");
+            }
+
+            num_slots = saved_slots;
+            return finalsum;
         }
 
-        if (debug_cuda) {
-            debug_label = "convbn_initial bias encode";
+        Ctxt convbn(const Ctxt& in, int layer, int n, double scale = 0.5,
+                    bool timing = false)
+        {
+            auto start = utils::start_time();
+
+            int img_width = 32;
+            int padding = 1;
+
+            std::vector<Ctxt> c_rotations;
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -padding), -img_width));
+            c_rotations.push_back(rotate_vector(in, -img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, padding), -img_width));
+            c_rotations.push_back(rotate_vector(in, -padding));
+            c_rotations.push_back(in);
+            c_rotations.push_back(rotate_vector(in, padding));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -padding), img_width));
+            c_rotations.push_back(rotate_vector(in, img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, padding), img_width));
+
+            std::vector<double> bias_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
+                scale);
+
+            Ctxt finalsum(context_);
+            bool init = false;
+
+            for (int j = 0; j < 16; j++)
+            {
+                std::vector<Ctxt> k_rows;
+                k_rows.reserve(9);
+                for (int k = 0; k < 9; k++)
+                {
+                    std::vector<double> values = utils::read_values_from_file(
+                        weights_dir + "/layer" + std::to_string(layer) +
+                            "-conv" + std::to_string(n) + "bn" +
+                            std::to_string(n) + "-ch" + std::to_string(j) +
+                            "-k" + std::to_string(k + 1) + ".bin",
+                        scale);
+                    Ptxt encoded = encode(values, in.depth(), 16384);
+                    k_rows.push_back(mult(c_rotations[k], encoded));
+                }
+
+                Ctxt sum = k_rows[0];
+                for (size_t i = 1; i < k_rows.size(); i++)
+                {
+                    sum = add(sum, k_rows[i]);
+                }
+
+                if (!init)
+                {
+                    finalsum = rotate_vector(sum, -1024);
+                    init = true;
+                }
+                else
+                {
+                    finalsum = add(finalsum, sum);
+                    finalsum = rotate_vector(finalsum, -1024);
+                }
+            }
+
+            if (debug_cuda)
+            {
+                debug_label = "convbn bias encode";
+            }
+            Ptxt bias = encode(bias_values, finalsum.depth(), 16384);
+            if (debug_cuda && debug_encode)
+            {
+                print_dbg(bias, 20, "convbn/bias");
+            }
+            finalsum = add_plain(finalsum, bias);
+
+            if (timing)
+            {
+                utils::print_duration(start, "Block " + std::to_string(layer) +
+                                                 " - convbn" +
+                                                 std::to_string(n));
+            }
+            return finalsum;
         }
-        Ptxt bias = encode(bias_values, finalsum.depth(), 16384);
-        finalsum = add_plain(finalsum, bias);
 
-        if (timing) {
-            utils::print_duration(start, "Initial layer");
+        Ctxt convbn2(const Ctxt& in, int layer, int n, double scale = 0.5,
+                     bool timing = false)
+        {
+            auto start = utils::start_time();
+
+            int img_width = 16;
+            int padding = 1;
+
+            std::vector<Ctxt> c_rotations;
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -padding), -img_width));
+            c_rotations.push_back(rotate_vector(in, -img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, padding), -img_width));
+            c_rotations.push_back(rotate_vector(in, -padding));
+            c_rotations.push_back(in);
+            c_rotations.push_back(rotate_vector(in, padding));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -padding), img_width));
+            c_rotations.push_back(rotate_vector(in, img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, padding), img_width));
+
+            std::vector<double> bias_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
+                scale);
+
+            Ctxt finalsum(context_);
+            bool init = false;
+
+            for (int j = 0; j < 32; j++)
+            {
+                std::vector<Ctxt> k_rows;
+                k_rows.reserve(9);
+                for (int k = 0; k < 9; k++)
+                {
+                    std::vector<double> values = utils::read_values_from_file(
+                        weights_dir + "/layer" + std::to_string(layer) +
+                            "-conv" + std::to_string(n) + "bn" +
+                            std::to_string(n) + "-ch" + std::to_string(j) +
+                            "-k" + std::to_string(k + 1) + ".bin",
+                        scale);
+                    Ptxt encoded = encode(values, in.depth(), 8192);
+                    k_rows.push_back(mult(c_rotations[k], encoded));
+                }
+
+                Ctxt sum = k_rows[0];
+                for (size_t i = 1; i < k_rows.size(); i++)
+                {
+                    sum = add(sum, k_rows[i]);
+                }
+
+                if (!init)
+                {
+                    finalsum = rotate_vector(sum, -256);
+                    init = true;
+                }
+                else
+                {
+                    finalsum = add(finalsum, sum);
+                    finalsum = rotate_vector(finalsum, -256);
+                }
+            }
+
+            if (debug_cuda)
+            {
+                debug_label = "convbn2 bias encode";
+            }
+            Ptxt bias = encode(bias_values, finalsum.depth(), 8192);
+            if (debug_cuda && debug_encode)
+            {
+                print_dbg(bias, 20, "convbn2/bias");
+            }
+            finalsum = add_plain(finalsum, bias);
+
+            if (timing)
+            {
+                utils::print_duration(start, "Block " + std::to_string(layer) +
+                                                 " - convbn" +
+                                                 std::to_string(n));
+            }
+            return finalsum;
         }
 
-        num_slots = saved_slots;
-        return finalsum;
-    }
+        Ctxt convbn3(const Ctxt& in, int layer, int n, double scale = 0.5,
+                     bool timing = false)
+        {
+            auto start = utils::start_time();
 
-    Ctxt convbn(const Ctxt& in, int layer, int n, double scale = 0.5,
-                bool timing = false)
-    {
-        auto start = utils::start_time();
+            int img_width = 8;
+            int padding = 1;
 
-        int img_width = 32;
-        int padding = 1;
+            std::vector<Ctxt> c_rotations;
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -padding), -img_width));
+            c_rotations.push_back(rotate_vector(in, -img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, padding), -img_width));
+            c_rotations.push_back(rotate_vector(in, -padding));
+            c_rotations.push_back(in);
+            c_rotations.push_back(rotate_vector(in, padding));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -padding), img_width));
+            c_rotations.push_back(rotate_vector(in, img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, padding), img_width));
 
-        std::vector<Ctxt> c_rotations;
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -padding), -img_width));
-        c_rotations.push_back(rotate_vector(in, -img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, padding), -img_width));
-        c_rotations.push_back(rotate_vector(in, -padding));
-        c_rotations.push_back(in);
-        c_rotations.push_back(rotate_vector(in, padding));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -padding), img_width));
-        c_rotations.push_back(rotate_vector(in, img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, padding), img_width));
+            std::vector<double> bias_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
+                scale);
 
-        std::vector<double> bias_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
-            scale);
+            Ctxt finalsum(context_);
+            bool init = false;
 
-        Ctxt finalsum(context_);
-        bool init = false;
+            for (int j = 0; j < 64; j++)
+            {
+                std::vector<Ctxt> k_rows;
+                k_rows.reserve(9);
+                for (int k = 0; k < 9; k++)
+                {
+                    std::vector<double> values = utils::read_values_from_file(
+                        weights_dir + "/layer" + std::to_string(layer) +
+                            "-conv" + std::to_string(n) + "bn" +
+                            std::to_string(n) + "-ch" + std::to_string(j) +
+                            "-k" + std::to_string(k + 1) + ".bin",
+                        scale);
+                    Ptxt encoded = encode(values, in.depth(), 4096);
+                    k_rows.push_back(mult(c_rotations[k], encoded));
+                }
 
-        for (int j = 0; j < 16; j++) {
-            std::vector<Ctxt> k_rows;
-            k_rows.reserve(9);
-            for (int k = 0; k < 9; k++) {
+                Ctxt sum = k_rows[0];
+                for (size_t i = 1; i < k_rows.size(); i++)
+                {
+                    sum = add(sum, k_rows[i]);
+                }
+
+                if (!init)
+                {
+                    finalsum = rotate_vector(sum, -64);
+                    init = true;
+                }
+                else
+                {
+                    finalsum = add(finalsum, sum);
+                    finalsum = rotate_vector(finalsum, -64);
+                }
+            }
+
+            if (debug_cuda)
+            {
+                debug_label = "convbn3 bias encode";
+            }
+            Ptxt bias = encode(bias_values, finalsum.depth(), 4096);
+            if (debug_cuda && debug_encode)
+            {
+                print_dbg(bias, 20, "convbn3/bias");
+            }
+            finalsum = add_plain(finalsum, bias);
+
+            if (timing)
+            {
+                utils::print_duration(start, "Block" + std::to_string(layer) +
+                                                 " - convbn" +
+                                                 std::to_string(n));
+            }
+            return finalsum;
+        }
+
+        std::vector<Ctxt> convbn1632sx(const Ctxt& in, int layer, int n,
+                                       double scale = 0.5, bool timing = false)
+        {
+            auto start = utils::start_time();
+
+            int img_width = 32;
+            int padding = 1;
+
+            std::vector<Ctxt> c_rotations;
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -(img_width)), -padding));
+            c_rotations.push_back(rotate_vector(in, -img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -(img_width)), padding));
+            c_rotations.push_back(rotate_vector(in, -padding));
+            c_rotations.push_back(in);
+            c_rotations.push_back(rotate_vector(in, padding));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, (img_width)), -padding));
+            c_rotations.push_back(rotate_vector(in, img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, (img_width)), padding));
+
+            std::vector<double> bias1_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
+                scale);
+            std::vector<double> bias2_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
+                scale);
+
+            Ctxt finalSum016(context_);
+            Ctxt finalSum1632(context_);
+            bool init = false;
+
+            for (int j = 0; j < 16; j++)
+            {
+                std::vector<Ctxt> k_rows016;
+                std::vector<Ctxt> k_rows1632;
+                k_rows016.reserve(9);
+                k_rows1632.reserve(9);
+
+                for (int k = 0; k < 9; k++)
+                {
+                    std::vector<double> values = utils::read_values_from_file(
+                        weights_dir + "/layer" + std::to_string(layer) +
+                            "-conv" + std::to_string(n) + "bn" +
+                            std::to_string(n) + "-ch" + std::to_string(j) +
+                            "-k" + std::to_string(k + 1) + ".bin",
+                        scale);
+                    k_rows016.push_back(mult(
+                        c_rotations[k], encode(values, in.depth(), 16384)));
+
+                    values = utils::read_values_from_file(
+                        weights_dir + "/layer" + std::to_string(layer) +
+                            "-conv" + std::to_string(n) + "bn" +
+                            std::to_string(n) + "-ch" + std::to_string(j + 16) +
+                            "-k" + std::to_string(k + 1) + ".bin",
+                        scale);
+                    k_rows1632.push_back(mult(
+                        c_rotations[k], encode(values, in.depth(), 16384)));
+                }
+
+                Ctxt sum016 = k_rows016[0];
+                Ctxt sum1632 = k_rows1632[0];
+                for (size_t i = 1; i < k_rows016.size(); i++)
+                {
+                    sum016 = add(sum016, k_rows016[i]);
+                    sum1632 = add(sum1632, k_rows1632[i]);
+                }
+
+                if (!init)
+                {
+                    finalSum016 = rotate_vector(sum016, -1024);
+                    finalSum1632 = rotate_vector(sum1632, -1024);
+                    init = true;
+                }
+                else
+                {
+                    finalSum016 = add(finalSum016, sum016);
+                    finalSum016 = rotate_vector(finalSum016, -1024);
+                    finalSum1632 = add(finalSum1632, sum1632);
+                    finalSum1632 = rotate_vector(finalSum1632, -1024);
+                }
+            }
+
+            if (debug_cuda)
+            {
+                debug_label = "convbn1632sx bias encode";
+            }
+            Ptxt bias1 = encode(bias1_values, finalSum016.depth(), 16384);
+            Ptxt bias2 = encode(bias2_values, finalSum1632.depth(), 16384);
+            if (debug_cuda && debug_encode)
+            {
+                print_dbg(bias1, 20, "convbn1632sx/bias1");
+                print_dbg(bias2, 20, "convbn1632sx/bias2");
+            }
+            finalSum016 = add_plain(finalSum016, bias1);
+            finalSum1632 = add_plain(finalSum1632, bias2);
+
+            if (timing)
+            {
+                utils::print_duration(start, "Block " + std::to_string(layer) +
+                                                 " - convbnSx" +
+                                                 std::to_string(n));
+            }
+            return {finalSum016, finalSum1632};
+        }
+
+        std::vector<Ctxt> convbn1632dx(const Ctxt& in, int layer, int n,
+                                       double scale = 0.5, bool timing = false)
+        {
+            auto start = utils::start_time();
+
+            std::vector<double> bias1_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
+                scale);
+            std::vector<double> bias2_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
+                scale);
+
+            Ctxt finalSum016(context_);
+            Ctxt finalSum1632(context_);
+            bool init = false;
+
+            for (int j = 0; j < 16; j++)
+            {
                 std::vector<double> values = utils::read_values_from_file(
-                    weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                        std::to_string(n) + "bn" + std::to_string(n) +
-                        "-ch" + std::to_string(j) + "-k" +
-                        std::to_string(k + 1) + ".bin",
+                    weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
+                        std::to_string(n) + "bn" + std::to_string(n) + "-ch" +
+                        std::to_string(j) + "-k" + std::to_string(1) + ".bin",
                     scale);
-                Ptxt encoded = encode(values, in.depth(), 16384);
-                k_rows.push_back(mult(c_rotations[k], encoded));
-            }
-
-            Ctxt sum = k_rows[0];
-            for (size_t i = 1; i < k_rows.size(); i++) {
-                sum = add(sum, k_rows[i]);
-            }
-
-            if (!init) {
-                finalsum = rotate_vector(sum, -1024);
-                init = true;
-            } else {
-                finalsum = add(finalsum, sum);
-                finalsum = rotate_vector(finalsum, -1024);
-            }
-        }
-
-        if (debug_cuda) {
-            debug_label = "convbn bias encode";
-        }
-        Ptxt bias = encode(bias_values, finalsum.depth(), 16384);
-        finalsum = add_plain(finalsum, bias);
-
-        if (timing) {
-            utils::print_duration(start, "Block " + std::to_string(layer) +
-                                             " - convbn" +
-                                             std::to_string(n));
-        }
-        return finalsum;
-    }
-
-    Ctxt convbn2(const Ctxt& in, int layer, int n, double scale = 0.5,
-                 bool timing = false)
-    {
-        auto start = utils::start_time();
-
-        int img_width = 16;
-        int padding = 1;
-
-        std::vector<Ctxt> c_rotations;
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -padding), -img_width));
-        c_rotations.push_back(rotate_vector(in, -img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, padding), -img_width));
-        c_rotations.push_back(rotate_vector(in, -padding));
-        c_rotations.push_back(in);
-        c_rotations.push_back(rotate_vector(in, padding));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -padding), img_width));
-        c_rotations.push_back(rotate_vector(in, img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, padding), img_width));
-
-        std::vector<double> bias_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
-            scale);
-
-        Ctxt finalsum(context_);
-        bool init = false;
-
-        for (int j = 0; j < 32; j++) {
-            std::vector<Ctxt> k_rows;
-            k_rows.reserve(9);
-            for (int k = 0; k < 9; k++) {
-                std::vector<double> values = utils::read_values_from_file(
-                    weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                        std::to_string(n) + "bn" + std::to_string(n) +
-                        "-ch" + std::to_string(j) + "-k" +
-                        std::to_string(k + 1) + ".bin",
-                    scale);
-                Ptxt encoded = encode(values, in.depth(), 8192);
-                k_rows.push_back(mult(c_rotations[k], encoded));
-            }
-
-            Ctxt sum = k_rows[0];
-            for (size_t i = 1; i < k_rows.size(); i++) {
-                sum = add(sum, k_rows[i]);
-            }
-
-            if (!init) {
-                finalsum = rotate_vector(sum, -256);
-                init = true;
-            } else {
-                finalsum = add(finalsum, sum);
-                finalsum = rotate_vector(finalsum, -256);
-            }
-        }
-
-        if (debug_cuda) {
-            debug_label = "convbn2 bias encode";
-        }
-        Ptxt bias = encode(bias_values, finalsum.depth(), 8192);
-        finalsum = add_plain(finalsum, bias);
-
-        if (timing) {
-            utils::print_duration(start, "Block " + std::to_string(layer) +
-                                             " - convbn" +
-                                             std::to_string(n));
-        }
-        return finalsum;
-    }
-
-    Ctxt convbn3(const Ctxt& in, int layer, int n, double scale = 0.5,
-                 bool timing = false)
-    {
-        auto start = utils::start_time();
-
-        int img_width = 8;
-        int padding = 1;
-
-        std::vector<Ctxt> c_rotations;
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -padding), -img_width));
-        c_rotations.push_back(rotate_vector(in, -img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, padding), -img_width));
-        c_rotations.push_back(rotate_vector(in, -padding));
-        c_rotations.push_back(in);
-        c_rotations.push_back(rotate_vector(in, padding));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -padding), img_width));
-        c_rotations.push_back(rotate_vector(in, img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, padding), img_width));
-
-        std::vector<double> bias_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias.bin",
-            scale);
-
-        Ctxt finalsum(context_);
-        bool init = false;
-
-        for (int j = 0; j < 64; j++) {
-            std::vector<Ctxt> k_rows;
-            k_rows.reserve(9);
-            for (int k = 0; k < 9; k++) {
-                std::vector<double> values = utils::read_values_from_file(
-                    weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                        std::to_string(n) + "bn" + std::to_string(n) +
-                        "-ch" + std::to_string(j) + "-k" +
-                        std::to_string(k + 1) + ".bin",
-                    scale);
-                Ptxt encoded = encode(values, in.depth(), 4096);
-                k_rows.push_back(mult(c_rotations[k], encoded));
-            }
-
-            Ctxt sum = k_rows[0];
-            for (size_t i = 1; i < k_rows.size(); i++) {
-                sum = add(sum, k_rows[i]);
-            }
-
-            if (!init) {
-                finalsum = rotate_vector(sum, -64);
-                init = true;
-            } else {
-                finalsum = add(finalsum, sum);
-                finalsum = rotate_vector(finalsum, -64);
-            }
-        }
-
-        if (debug_cuda) {
-            debug_label = "convbn3 bias encode";
-        }
-        Ptxt bias = encode(bias_values, finalsum.depth(), 4096);
-        finalsum = add_plain(finalsum, bias);
-
-        if (timing) {
-            utils::print_duration(start, "Block" + std::to_string(layer) +
-                                             " - convbn" +
-                                             std::to_string(n));
-        }
-        return finalsum;
-    }
-
-    std::vector<Ctxt> convbn1632sx(const Ctxt& in, int layer, int n,
-                                   double scale = 0.5, bool timing = false)
-    {
-        auto start = utils::start_time();
-
-        int img_width = 32;
-        int padding = 1;
-
-        std::vector<Ctxt> c_rotations;
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -(img_width)), -padding));
-        c_rotations.push_back(rotate_vector(in, -img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -(img_width)), padding));
-        c_rotations.push_back(rotate_vector(in, -padding));
-        c_rotations.push_back(in);
-        c_rotations.push_back(rotate_vector(in, padding));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, (img_width)), -padding));
-        c_rotations.push_back(rotate_vector(in, img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, (img_width)), padding));
-
-        std::vector<double> bias1_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
-            scale);
-        std::vector<double> bias2_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
-            scale);
-
-        Ctxt finalSum016(context_);
-        Ctxt finalSum1632(context_);
-        bool init = false;
-
-        for (int j = 0; j < 16; j++) {
-            std::vector<Ctxt> k_rows016;
-            std::vector<Ctxt> k_rows1632;
-            k_rows016.reserve(9);
-            k_rows1632.reserve(9);
-
-            for (int k = 0; k < 9; k++) {
-                std::vector<double> values = utils::read_values_from_file(
-                    weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                        std::to_string(n) + "bn" + std::to_string(n) +
-                        "-ch" + std::to_string(j) + "-k" +
-                        std::to_string(k + 1) + ".bin",
-                    scale);
-                k_rows016.push_back(
-                    mult(c_rotations[k], encode(values, in.depth(), 16384)));
+                Ctxt sum016 = mult(in, encode(values, in.depth(), num_slots));
 
                 values = utils::read_values_from_file(
-                    weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                        std::to_string(n) + "bn" + std::to_string(n) +
-                        "-ch" + std::to_string(j + 16) + "-k" +
-                        std::to_string(k + 1) + ".bin",
+                    weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
+                        std::to_string(n) + "bn" + std::to_string(n) + "-ch" +
+                        std::to_string(j + 16) + "-k" + std::to_string(1) +
+                        ".bin",
                     scale);
-                k_rows1632.push_back(
-                    mult(c_rotations[k], encode(values, in.depth(), 16384)));
+                Ctxt sum1632 = mult(in, encode(values, in.depth(), num_slots));
+
+                if (!init)
+                {
+                    finalSum016 = rotate_vector(sum016, -1024);
+                    finalSum1632 = rotate_vector(sum1632, -1024);
+                    init = true;
+                }
+                else
+                {
+                    finalSum016 = add(finalSum016, sum016);
+                    finalSum016 = rotate_vector(finalSum016, -1024);
+                    finalSum1632 = add(finalSum1632, sum1632);
+                    finalSum1632 = rotate_vector(finalSum1632, -1024);
+                }
             }
 
-            Ctxt sum016 = k_rows016[0];
-            Ctxt sum1632 = k_rows1632[0];
-            for (size_t i = 1; i < k_rows016.size(); i++) {
-                sum016 = add(sum016, k_rows016[i]);
-                sum1632 = add(sum1632, k_rows1632[i]);
+            if (debug_cuda)
+            {
+                debug_label = "convbn1632dx bias encode";
+            }
+            Ptxt bias1 = encode(bias1_values, finalSum016.depth(), 16384);
+            Ptxt bias2 = encode(bias2_values, finalSum1632.depth(), 16384);
+            if (debug_cuda && debug_encode)
+            {
+                print_dbg(bias1, 20, "convbn1632dx/bias1");
+                print_dbg(bias2, 20, "convbn1632dx/bias2");
+            }
+            finalSum016 = add_plain(finalSum016, bias1);
+            finalSum1632 = add_plain(finalSum1632, bias2);
+
+            if (timing)
+            {
+                utils::print_duration(start, "Block " + std::to_string(layer) +
+                                                 " - convbnDx" +
+                                                 std::to_string(n));
             }
 
-            if (!init) {
-                finalSum016 = rotate_vector(sum016, -1024);
-                finalSum1632 = rotate_vector(sum1632, -1024);
-                init = true;
-            } else {
-                finalSum016 = add(finalSum016, sum016);
-                finalSum016 = rotate_vector(finalSum016, -1024);
-                finalSum1632 = add(finalSum1632, sum1632);
-                finalSum1632 = rotate_vector(finalSum1632, -1024);
-            }
+            return {finalSum016, finalSum1632};
         }
 
-        if (debug_cuda) {
-            debug_label = "convbn1632sx bias encode";
-        }
-        Ptxt bias1 = encode(bias1_values, finalSum016.depth(), 16384);
-        Ptxt bias2 = encode(bias2_values, finalSum1632.depth(), 16384);
-        finalSum016 = add_plain(finalSum016, bias1);
-        finalSum1632 = add_plain(finalSum1632, bias2);
+        std::vector<Ctxt> convbn3264sx(const Ctxt& in, int layer, int n,
+                                       double scale = 0.5, bool timing = false)
+        {
+            auto start = utils::start_time();
 
-        if (timing) {
-            utils::print_duration(start, "Block " + std::to_string(layer) +
-                                             " - convbnSx" +
-                                             std::to_string(n));
-        }
-        return {finalSum016, finalSum1632};
-    }
+            int img_width = 16;
+            int padding = 1;
 
-    std::vector<Ctxt> convbn1632dx(const Ctxt& in, int layer, int n,
-                                   double scale = 0.5, bool timing = false)
-    {
-        auto start = utils::start_time();
+            std::vector<Ctxt> c_rotations;
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -(img_width)), -padding));
+            c_rotations.push_back(rotate_vector(in, -img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, -(img_width)), padding));
+            c_rotations.push_back(rotate_vector(in, -padding));
+            c_rotations.push_back(in);
+            c_rotations.push_back(rotate_vector(in, padding));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, (img_width)), -padding));
+            c_rotations.push_back(rotate_vector(in, img_width));
+            c_rotations.push_back(
+                rotate_vector(rotate_vector(in, (img_width)), padding));
 
-        std::vector<double> bias1_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
-            scale);
-        std::vector<double> bias2_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
-            scale);
-
-        Ctxt finalSum016(context_);
-        Ctxt finalSum1632(context_);
-        bool init = false;
-
-        for (int j = 0; j < 16; j++) {
-            std::vector<double> values = utils::read_values_from_file(
-                weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
-                    std::to_string(n) + "bn" + std::to_string(n) + "-ch" +
-                    std::to_string(j) + "-k" + std::to_string(1) + ".bin",
+            std::vector<double> bias1_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
                 scale);
-            Ctxt sum016 = mult(in, encode(values, in.depth(), num_slots));
-
-            values = utils::read_values_from_file(
-                weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
-                    std::to_string(n) + "bn" + std::to_string(n) + "-ch" +
-                    std::to_string(j + 16) + "-k" + std::to_string(1) + ".bin",
+            std::vector<double> bias2_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
                 scale);
-            Ctxt sum1632 = mult(in, encode(values, in.depth(), num_slots));
 
-            if (!init) {
-                finalSum016 = rotate_vector(sum016, -1024);
-                finalSum1632 = rotate_vector(sum1632, -1024);
-                init = true;
-            } else {
-                finalSum016 = add(finalSum016, sum016);
-                finalSum016 = rotate_vector(finalSum016, -1024);
-                finalSum1632 = add(finalSum1632, sum1632);
-                finalSum1632 = rotate_vector(finalSum1632, -1024);
+            Ctxt finalSum032(context_);
+            Ctxt finalSum3264(context_);
+            bool init = false;
+
+            for (int j = 0; j < 32; j++)
+            {
+                std::vector<Ctxt> k_rows032;
+                std::vector<Ctxt> k_rows3264;
+                k_rows032.reserve(9);
+                k_rows3264.reserve(9);
+
+                for (int k = 0; k < 9; k++)
+                {
+                    std::vector<double> values = utils::read_values_from_file(
+                        weights_dir + "/layer" + std::to_string(layer) +
+                            "-conv" + std::to_string(n) + "bn" +
+                            std::to_string(n) + "-ch" + std::to_string(j) +
+                            "-k" + std::to_string(k + 1) + ".bin",
+                        scale);
+                    k_rows032.push_back(
+                        mult(c_rotations[k], encode(values, in.depth(), 8192)));
+
+                    values = utils::read_values_from_file(
+                        weights_dir + "/layer" + std::to_string(layer) +
+                            "-conv" + std::to_string(n) + "bn" +
+                            std::to_string(n) + "-ch" + std::to_string(j + 32) +
+                            "-k" + std::to_string(k + 1) + ".bin",
+                        scale);
+                    k_rows3264.push_back(
+                        mult(c_rotations[k], encode(values, in.depth(), 8192)));
+                }
+
+                Ctxt sum032 = k_rows032[0];
+                Ctxt sum3264 = k_rows3264[0];
+                for (size_t i = 1; i < k_rows032.size(); i++)
+                {
+                    sum032 = add(sum032, k_rows032[i]);
+                    sum3264 = add(sum3264, k_rows3264[i]);
+                }
+
+                if (!init)
+                {
+                    finalSum032 = rotate_vector(sum032, -256);
+                    finalSum3264 = rotate_vector(sum3264, -256);
+                    init = true;
+                }
+                else
+                {
+                    finalSum032 = add(finalSum032, sum032);
+                    finalSum032 = rotate_vector(finalSum032, -256);
+                    finalSum3264 = add(finalSum3264, sum3264);
+                    finalSum3264 = rotate_vector(finalSum3264, -256);
+                }
             }
+
+            if (debug_cuda)
+            {
+                debug_label = "convbn3264sx bias encode";
+            }
+            Ptxt bias1 = encode(bias1_values, finalSum032.depth(), 8192);
+            Ptxt bias2 = encode(bias2_values, finalSum3264.depth(), 8192);
+            if (debug_cuda && debug_encode)
+            {
+                print_dbg(bias1, 20, "convbn3264sx/bias1");
+                print_dbg(bias2, 20, "convbn3264sx/bias2");
+            }
+            finalSum032 = add_plain(finalSum032, bias1);
+            finalSum3264 = add_plain(finalSum3264, bias2);
+
+            if (timing)
+            {
+                utils::print_duration(start, "Block " + std::to_string(layer) +
+                                                 " - convbnSx" +
+                                                 std::to_string(n));
+            }
+
+            return {finalSum032, finalSum3264};
         }
 
-        if (debug_cuda) {
-            debug_label = "convbn1632dx bias encode";
-        }
-        Ptxt bias1 = encode(bias1_values, finalSum016.depth(), 16384);
-        Ptxt bias2 = encode(bias2_values, finalSum1632.depth(), 16384);
-        finalSum016 = add_plain(finalSum016, bias1);
-        finalSum1632 = add_plain(finalSum1632, bias2);
+        std::vector<Ctxt> convbn3264dx(const Ctxt& in, int layer, int n,
+                                       double scale = 0.5, bool timing = false)
+        {
+            auto start = utils::start_time();
 
-        if (timing) {
-            utils::print_duration(start, "Block " + std::to_string(layer) +
-                                             " - convbnDx" +
-                                             std::to_string(n));
-        }
+            std::vector<double> bias1_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
+                scale);
+            std::vector<double> bias2_values = utils::read_values_from_file(
+                weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
+                    std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
+                scale);
 
-        return {finalSum016, finalSum1632};
-    }
+            Ctxt finalSum032(context_);
+            Ctxt finalSum3264(context_);
+            bool init = false;
 
-    std::vector<Ctxt> convbn3264sx(const Ctxt& in, int layer, int n,
-                                   double scale = 0.5, bool timing = false)
-    {
-        auto start = utils::start_time();
-
-        int img_width = 16;
-        int padding = 1;
-
-        std::vector<Ctxt> c_rotations;
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -(img_width)), -padding));
-        c_rotations.push_back(rotate_vector(in, -img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, -(img_width)), padding));
-        c_rotations.push_back(rotate_vector(in, -padding));
-        c_rotations.push_back(in);
-        c_rotations.push_back(rotate_vector(in, padding));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, (img_width)), -padding));
-        c_rotations.push_back(rotate_vector(in, img_width));
-        c_rotations.push_back(
-            rotate_vector(rotate_vector(in, (img_width)), padding));
-
-        std::vector<double> bias1_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
-            scale);
-        std::vector<double> bias2_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
-            scale);
-
-        Ctxt finalSum032(context_);
-        Ctxt finalSum3264(context_);
-        bool init = false;
-
-        for (int j = 0; j < 32; j++) {
-            std::vector<Ctxt> k_rows032;
-            std::vector<Ctxt> k_rows3264;
-            k_rows032.reserve(9);
-            k_rows3264.reserve(9);
-
-            for (int k = 0; k < 9; k++) {
+            for (int j = 0; j < 32; j++)
+            {
                 std::vector<double> values = utils::read_values_from_file(
-                    weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                        std::to_string(n) + "bn" + std::to_string(n) +
-                        "-ch" + std::to_string(j) + "-k" +
-                        std::to_string(k + 1) + ".bin",
+                    weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
+                        std::to_string(n) + "bn" + std::to_string(n) + "-ch" +
+                        std::to_string(j) + "-k" + std::to_string(1) + ".bin",
                     scale);
-                k_rows032.push_back(
-                    mult(c_rotations[k], encode(values, in.depth(), 8192)));
+                Ctxt sum032 = mult(in, encode(values, in.depth(), 8192));
 
                 values = utils::read_values_from_file(
-                    weights_dir + "/layer" + std::to_string(layer) + "-conv" +
-                        std::to_string(n) + "bn" + std::to_string(n) +
-                        "-ch" + std::to_string(j + 32) + "-k" +
-                        std::to_string(k + 1) + ".bin",
+                    weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
+                        std::to_string(n) + "bn" + std::to_string(n) + "-ch" +
+                        std::to_string(j + 32) + "-k" + std::to_string(1) +
+                        ".bin",
                     scale);
-                k_rows3264.push_back(
-                    mult(c_rotations[k], encode(values, in.depth(), 8192)));
+                Ctxt sum3264 = mult(in, encode(values, in.depth(), 8192));
+
+                if (!init)
+                {
+                    finalSum032 = rotate_vector(sum032, -256);
+                    finalSum3264 = rotate_vector(sum3264, -256);
+                    init = true;
+                }
+                else
+                {
+                    finalSum032 = add(finalSum032, sum032);
+                    finalSum032 = rotate_vector(finalSum032, -256);
+                    finalSum3264 = add(finalSum3264, sum3264);
+                    finalSum3264 = rotate_vector(finalSum3264, -256);
+                }
             }
 
-            Ctxt sum032 = k_rows032[0];
-            Ctxt sum3264 = k_rows3264[0];
-            for (size_t i = 1; i < k_rows032.size(); i++) {
-                sum032 = add(sum032, k_rows032[i]);
-                sum3264 = add(sum3264, k_rows3264[i]);
+            if (debug_cuda)
+            {
+                debug_label = "convbn3264dx bias encode";
+            }
+            Ptxt bias1 = encode(bias1_values, finalSum032.depth(), 8192);
+            Ptxt bias2 = encode(bias2_values, finalSum3264.depth(), 8192);
+            if (debug_cuda && debug_encode)
+            {
+                print_dbg(bias1, 20, "convbn3264dx/bias1");
+                print_dbg(bias2, 20, "convbn3264dx/bias2");
+            }
+            finalSum032 = add_plain(finalSum032, bias1);
+            finalSum3264 = add_plain(finalSum3264, bias2);
+
+            if (timing)
+            {
+                utils::print_duration(start, "Block " + std::to_string(layer) +
+                                                 " - convbnDx" +
+                                                 std::to_string(n));
             }
 
-            if (!init) {
-                finalSum032 = rotate_vector(sum032, -256);
-                finalSum3264 = rotate_vector(sum3264, -256);
-                init = true;
-            } else {
-                finalSum032 = add(finalSum032, sum032);
-                finalSum032 = rotate_vector(finalSum032, -256);
-                finalSum3264 = add(finalSum3264, sum3264);
-                finalSum3264 = rotate_vector(finalSum3264, -256);
+            return {finalSum032, finalSum3264};
+        }
+
+        Ctxt downsample1024to256(const Ctxt& c1, const Ctxt& c2)
+        {
+            num_slots = 16384 * 2;
+
+            Ctxt fullpack = add(mult(c1, mask_first_n(16384, c1.depth())),
+                                mult(c2, mask_second_n(16384, c2.depth())));
+
+            fullpack = mult(add(fullpack, rotate_vector(fullpack, 1)),
+                            gen_mask(2, fullpack.depth()));
+            fullpack = mult(
+                add(fullpack, rotate_vector(rotate_vector(fullpack, 1), 1)),
+                gen_mask(4, fullpack.depth()));
+            fullpack = mult(add(fullpack, rotate_vector(fullpack, 4)),
+                            gen_mask(8, fullpack.depth()));
+            fullpack = add(fullpack, rotate_vector(fullpack, 8));
+
+            Ctxt downsampledrows = encrypt({0}, c1.depth());
+
+            for (int i = 0; i < 16; i++)
+            {
+                Ctxt masked = mult(
+                    fullpack, mask_first_n_mod(16, 1024, i, fullpack.depth()));
+                downsampledrows = add(downsampledrows, masked);
+                if (i < 15)
+                {
+                    fullpack = rotate_vector(fullpack, 64 - 16);
+                }
             }
-        }
 
-        if (debug_cuda) {
-            debug_label = "convbn3264sx bias encode";
-        }
-        Ptxt bias1 = encode(bias1_values, finalSum032.depth(), 8192);
-        Ptxt bias2 = encode(bias2_values, finalSum3264.depth(), 8192);
-        finalSum032 = add_plain(finalSum032, bias1);
-        finalSum3264 = add_plain(finalSum3264, bias2);
-
-        if (timing) {
-            utils::print_duration(start, "Block " + std::to_string(layer) +
-                                             " - convbnSx" +
-                                             std::to_string(n));
-        }
-
-        return {finalSum032, finalSum3264};
-    }
-
-    std::vector<Ctxt> convbn3264dx(const Ctxt& in, int layer, int n,
-                                   double scale = 0.5, bool timing = false)
-    {
-        auto start = utils::start_time();
-
-        std::vector<double> bias1_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias1.bin",
-            scale);
-        std::vector<double> bias2_values = utils::read_values_from_file(
-            weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
-                std::to_string(n) + "bn" + std::to_string(n) + "-bias2.bin",
-            scale);
-
-        Ctxt finalSum032(context_);
-        Ctxt finalSum3264(context_);
-        bool init = false;
-
-        for (int j = 0; j < 32; j++) {
-            std::vector<double> values = utils::read_values_from_file(
-                weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
-                    std::to_string(n) + "bn" + std::to_string(n) + "-ch" +
-                    std::to_string(j) + "-k" + std::to_string(1) + ".bin",
-                scale);
-            Ctxt sum032 = mult(in, encode(values, in.depth(), 8192));
-
-            values = utils::read_values_from_file(
-                weights_dir + "/layer" + std::to_string(layer) + "dx-conv" +
-                    std::to_string(n) + "bn" + std::to_string(n) + "-ch" +
-                    std::to_string(j + 32) + "-k" + std::to_string(1) + ".bin",
-                scale);
-            Ctxt sum3264 = mult(in, encode(values, in.depth(), 8192));
-
-            if (!init) {
-                finalSum032 = rotate_vector(sum032, -256);
-                finalSum3264 = rotate_vector(sum3264, -256);
-                init = true;
-            } else {
-                finalSum032 = add(finalSum032, sum032);
-                finalSum032 = rotate_vector(finalSum032, -256);
-                finalSum3264 = add(finalSum3264, sum3264);
-                finalSum3264 = rotate_vector(finalSum3264, -256);
+            Ctxt downsampledchannels = encrypt({0}, c1.depth());
+            for (int i = 0; i < 32; i++)
+            {
+                Ctxt masked = mult(downsampledrows,
+                                   mask_channel(i, downsampledrows.depth()));
+                downsampledchannels = add(downsampledchannels, masked);
+                downsampledchannels =
+                    rotate_vector(downsampledchannels, -(1024 - 256));
             }
-        }
 
-        if (debug_cuda) {
-            debug_label = "convbn3264dx bias encode";
-        }
-        Ptxt bias1 = encode(bias1_values, finalSum032.depth(), 8192);
-        Ptxt bias2 = encode(bias2_values, finalSum3264.depth(), 8192);
-        finalSum032 = add_plain(finalSum032, bias1);
-        finalSum3264 = add_plain(finalSum3264, bias2);
-
-        if (timing) {
-            utils::print_duration(start, "Block " + std::to_string(layer) +
-                                             " - convbnDx" +
-                                             std::to_string(n));
-        }
-
-        return {finalSum032, finalSum3264};
-    }
-
-    Ctxt downsample1024to256(const Ctxt& c1, const Ctxt& c2)
-    {
-        num_slots = 16384 * 2;
-
-        Ctxt fullpack = add(mult(c1, mask_first_n(16384, c1.depth())),
-                            mult(c2, mask_second_n(16384, c2.depth())));
-
-        fullpack = mult(
-            add(fullpack, rotate_vector(fullpack, 1)),
-            gen_mask(2, fullpack.depth()));
-        fullpack = mult(
-            add(fullpack, rotate_vector(rotate_vector(fullpack, 1), 1)),
-            gen_mask(4, fullpack.depth()));
-        fullpack = mult(add(fullpack, rotate_vector(fullpack, 4)),
-                        gen_mask(8, fullpack.depth()));
-        fullpack = add(fullpack, rotate_vector(fullpack, 8));
-
-        Ctxt downsampledrows = encrypt({0}, c1.depth());
-
-        for (int i = 0; i < 16; i++) {
-            Ctxt masked = mult(fullpack,
-                               mask_first_n_mod(16, 1024, i, fullpack.depth()));
-            downsampledrows = add(downsampledrows, masked);
-            if (i < 15) {
-                fullpack = rotate_vector(fullpack, 64 - 16);
-            }
-        }
-
-        Ctxt downsampledchannels = encrypt({0}, c1.depth());
-        for (int i = 0; i < 32; i++) {
-            Ctxt masked =
-                mult(downsampledrows, mask_channel(i, downsampledrows.depth()));
-            downsampledchannels = add(downsampledchannels, masked);
             downsampledchannels =
-                rotate_vector(downsampledchannels, -(1024 - 256));
-        }
-
-        downsampledchannels =
-            rotate_vector(downsampledchannels, (1024 - 256) * 32);
-        downsampledchannels =
-            add(downsampledchannels, rotate_vector(downsampledchannels, -8192));
-        downsampledchannels = add(
-            downsampledchannels,
-            rotate_vector(rotate_vector(downsampledchannels, -8192), -8192));
-
-        num_slots = 8192;
-        return downsampledchannels;
-    }
-
-    Ctxt downsample256to64(const Ctxt& c1, const Ctxt& c2)
-    {
-        num_slots = 8192 * 2;
-        Ctxt fullpack = add(mult(c1, mask_first_n(8192, c1.depth())),
-                            mult(c2, mask_second_n(8192, c2.depth())));
-
-        fullpack = mult(
-            add(fullpack, rotate_vector(fullpack, 1)),
-            gen_mask(2, fullpack.depth()));
-        fullpack = mult(
-            add(fullpack, rotate_vector(rotate_vector(fullpack, 1), 1)),
-            gen_mask(4, fullpack.depth()));
-        fullpack = add(fullpack, rotate_vector(fullpack, 4));
-
-        Ctxt downsampledrows = encrypt({0}, c1.depth());
-
-        for (int i = 0; i < 32; i++) {
-            Ctxt masked = mult(fullpack,
-                               mask_first_n_mod2(8, 256, i, fullpack.depth()));
-            downsampledrows = add(downsampledrows, masked);
-            if (i < 31) {
-                fullpack = rotate_vector(fullpack, 32 - 8);
-            }
-        }
-
-        Ctxt downsampledchannels = encrypt({0}, c1.depth());
-        for (int i = 0; i < 64; i++) {
-            Ctxt masked = mult(downsampledrows,
-                               mask_channel_2(i, downsampledrows.depth()));
-            downsampledchannels = add(downsampledchannels, masked);
+                rotate_vector(downsampledchannels, (1024 - 256) * 32);
+            downsampledchannels = add(
+                downsampledchannels, rotate_vector(downsampledchannels, -8192));
             downsampledchannels =
-                rotate_vector(downsampledchannels, -(256 - 64));
+                add(downsampledchannels,
+                    rotate_vector(rotate_vector(downsampledchannels, -8192),
+                                  -8192));
+
+            num_slots = 8192;
+            return downsampledchannels;
         }
 
-        downsampledchannels =
-            rotate_vector(downsampledchannels, (256 - 64) * 64);
-        downsampledchannels =
-            add(downsampledchannels, rotate_vector(downsampledchannels, -4096));
-        downsampledchannels = add(
-            downsampledchannels,
-            rotate_vector(rotate_vector(downsampledchannels, -4096), -4096));
+        Ctxt downsample256to64(const Ctxt& c1, const Ctxt& c2)
+        {
+            num_slots = 8192 * 2;
+            Ctxt fullpack = add(mult(c1, mask_first_n(8192, c1.depth())),
+                                mult(c2, mask_second_n(8192, c2.depth())));
 
-        num_slots = 4096;
-        return downsampledchannels;
-    }
+            fullpack = mult(add(fullpack, rotate_vector(fullpack, 1)),
+                            gen_mask(2, fullpack.depth()));
+            fullpack = mult(
+                add(fullpack, rotate_vector(rotate_vector(fullpack, 1), 1)),
+                gen_mask(4, fullpack.depth()));
+            fullpack = add(fullpack, rotate_vector(fullpack, 4));
 
-    Ctxt rotsum(const Ctxt& in, int slots)
-    {
-        Ctxt result = in;
-        for (int i = 0; i < static_cast<int>(std::log2(slots)); i++) {
-            result = add(result, rotate_vector(result, 1 << i));
+            Ctxt downsampledrows = encrypt({0}, c1.depth());
+
+            for (int i = 0; i < 32; i++)
+            {
+                Ctxt masked = mult(
+                    fullpack, mask_first_n_mod2(8, 256, i, fullpack.depth()));
+                downsampledrows = add(downsampledrows, masked);
+                if (i < 31)
+                {
+                    fullpack = rotate_vector(fullpack, 32 - 8);
+                }
+            }
+
+            Ctxt downsampledchannels = encrypt({0}, c1.depth());
+            for (int i = 0; i < 64; i++)
+            {
+                Ctxt masked = mult(downsampledrows,
+                                   mask_channel_2(i, downsampledrows.depth()));
+                downsampledchannels = add(downsampledchannels, masked);
+                downsampledchannels =
+                    rotate_vector(downsampledchannels, -(256 - 64));
+            }
+
+            downsampledchannels =
+                rotate_vector(downsampledchannels, (256 - 64) * 64);
+            downsampledchannels = add(
+                downsampledchannels, rotate_vector(downsampledchannels, -4096));
+            downsampledchannels =
+                add(downsampledchannels,
+                    rotate_vector(rotate_vector(downsampledchannels, -4096),
+                                  -4096));
+
+            num_slots = 4096;
+            return downsampledchannels;
         }
-        return result;
-    }
 
-    Ctxt rotsum_padded(const Ctxt& in, int slots)
-    {
-        Ctxt result = in;
-        for (int i = 0; i < static_cast<int>(std::log2(slots)); i++) {
-            result = add(result, rotate_vector(result, slots * (1 << i)));
+        Ctxt rotsum(const Ctxt& in, int slots)
+        {
+            Ctxt result = in;
+            for (int i = 0; i < static_cast<int>(std::log2(slots)); i++)
+            {
+                result = add(result, rotate_vector(result, 1 << i));
+            }
+            return result;
         }
-        return result;
-    }
 
-    Ctxt repeat(const Ctxt& in, int slots)
-    {
-        return rotate_vector(rotsum(in, slots), -slots + 1);
-    }
+        Ctxt rotsum_padded(const Ctxt& in, int slots)
+        {
+            Ctxt result = in;
+            for (int i = 0; i < static_cast<int>(std::log2(slots)); i++)
+            {
+                result = add(result, rotate_vector(result, slots * (1 << i)));
+            }
+            return result;
+        }
 
-    // Masks
-    Ptxt gen_mask(int n, int target_depth)
-    {
-        std::vector<double> mask(num_slots, 0.0);
-        int copy_interval = n;
-        for (int i = 0; i < num_slots; i++) {
-            if (copy_interval > 0) {
+        Ctxt repeat(const Ctxt& in, int slots)
+        {
+            return rotate_vector(rotsum(in, slots), -slots + 1);
+        }
+
+        // Masks
+        Ptxt gen_mask(int n, int target_depth)
+        {
+            std::vector<double> mask(num_slots, 0.0);
+            int copy_interval = n;
+            for (int i = 0; i < num_slots; i++)
+            {
+                if (copy_interval > 0)
+                {
+                    mask[static_cast<size_t>(i)] = 1.0;
+                }
+                copy_interval--;
+                if (copy_interval <= -n)
+                {
+                    copy_interval = n;
+                }
+            }
+            return encode(mask, target_depth, num_slots);
+        }
+
+        Ptxt mask_first_n(int n, int target_depth)
+        {
+            std::vector<double> mask(num_slots, 0.0);
+            for (int i = 0; i < std::min(n, num_slots); i++)
+            {
                 mask[static_cast<size_t>(i)] = 1.0;
             }
-            copy_interval--;
-            if (copy_interval <= -n) {
-                copy_interval = n;
+            return encode(mask, target_depth, num_slots);
+        }
+
+        Ptxt mask_second_n(int n, int target_depth)
+        {
+            std::vector<double> mask(num_slots, 0.0);
+            for (int i = n; i < num_slots; i++)
+            {
+                mask[static_cast<size_t>(i)] = 1.0;
             }
+            return encode(mask, target_depth, num_slots);
         }
-        return encode(mask, target_depth, num_slots);
-    }
 
-    Ptxt mask_first_n(int n, int target_depth)
-    {
-        std::vector<double> mask(num_slots, 0.0);
-        for (int i = 0; i < std::min(n, num_slots); i++) {
-            mask[static_cast<size_t>(i)] = 1.0;
-        }
-        return encode(mask, target_depth, num_slots);
-    }
-
-    Ptxt mask_second_n(int n, int target_depth)
-    {
-        std::vector<double> mask(num_slots, 0.0);
-        for (int i = n; i < num_slots; i++) {
-            mask[static_cast<size_t>(i)] = 1.0;
-        }
-        return encode(mask, target_depth, num_slots);
-    }
-
-    Ptxt mask_first_n_mod(int n, int padding, int pos, int target_depth)
-    {
-        std::vector<double> mask;
-        mask.reserve(16384 * 2);
-        for (int i = 0; i < 32; i++) {
-            for (int j = 0; j < (pos * n); j++) {
-                mask.push_back(0);
+        Ptxt mask_first_n_mod(int n, int padding, int pos, int target_depth)
+        {
+            std::vector<double> mask;
+            mask.reserve(16384 * 2);
+            for (int i = 0; i < 32; i++)
+            {
+                for (int j = 0; j < (pos * n); j++)
+                {
+                    mask.push_back(0);
+                }
+                for (int j = 0; j < n; j++)
+                {
+                    mask.push_back(1);
+                }
+                for (int j = 0; j < (padding - n - (pos * n)); j++)
+                {
+                    mask.push_back(0);
+                }
             }
-            for (int j = 0; j < n; j++) {
+            return encode(mask, target_depth, static_cast<int>(mask.size()));
+        }
+
+        Ptxt mask_first_n_mod2(int n, int padding, int pos, int target_depth)
+        {
+            std::vector<double> mask;
+            mask.reserve(8192 * 2);
+            for (int i = 0; i < 64; i++)
+            {
+                for (int j = 0; j < (pos * n); j++)
+                {
+                    mask.push_back(0);
+                }
+                for (int j = 0; j < n; j++)
+                {
+                    mask.push_back(1);
+                }
+                for (int j = 0; j < (padding - n - (pos * n)); j++)
+                {
+                    mask.push_back(0);
+                }
+            }
+            return encode(mask, target_depth, static_cast<int>(mask.size()));
+        }
+
+        Ptxt mask_channel(int n, int target_depth)
+        {
+            std::vector<double> mask;
+            mask.reserve(16384 * 2);
+
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < 1024; j++)
+                {
+                    mask.push_back(0);
+                }
+            }
+
+            for (int i = 0; i < 256; i++)
+            {
                 mask.push_back(1);
             }
-            for (int j = 0; j < (padding - n - (pos * n)); j++) {
-                mask.push_back(0);
-            }
-        }
-        return encode(mask, target_depth, static_cast<int>(mask.size()));
-    }
 
-    Ptxt mask_first_n_mod2(int n, int padding, int pos, int target_depth)
-    {
-        std::vector<double> mask;
-        mask.reserve(8192 * 2);
-        for (int i = 0; i < 64; i++) {
-            for (int j = 0; j < (pos * n); j++) {
+            for (int i = 0; i < 1024 - 256; i++)
+            {
                 mask.push_back(0);
             }
-            for (int j = 0; j < n; j++) {
+
+            for (int i = 0; i < 31 - n; i++)
+            {
+                for (int j = 0; j < 1024; j++)
+                {
+                    mask.push_back(0);
+                }
+            }
+
+            return encode(mask, target_depth, static_cast<int>(mask.size()));
+        }
+
+        Ptxt mask_channel_2(int n, int target_depth)
+        {
+            std::vector<double> mask;
+            mask.reserve(8192 * 2);
+
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < 256; j++)
+                {
+                    mask.push_back(0);
+                }
+            }
+
+            for (int i = 0; i < 64; i++)
+            {
                 mask.push_back(1);
             }
-            for (int j = 0; j < (padding - n - (pos * n)); j++) {
+
+            for (int i = 0; i < 256 - 64; i++)
+            {
                 mask.push_back(0);
             }
+
+            for (int i = 0; i < 63 - n; i++)
+            {
+                for (int j = 0; j < 256; j++)
+                {
+                    mask.push_back(0);
+                }
+            }
+
+            return encode(mask, target_depth, static_cast<int>(mask.size()));
         }
-        return encode(mask, target_depth, static_cast<int>(mask.size()));
-    }
 
-    Ptxt mask_channel(int n, int target_depth)
-    {
-        std::vector<double> mask;
-        mask.reserve(16384 * 2);
+        Ptxt mask_mod(int n, int target_depth, double custom_val)
+        {
+            std::vector<double> vec(num_slots, 0.0);
+            for (int i = 0; i < num_slots; i++)
+            {
+                if (i % n == 0)
+                {
+                    vec[static_cast<size_t>(i)] = custom_val;
+                }
+            }
+            return encode(vec, target_depth, num_slots);
+        }
 
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < 1024; j++) {
-                mask.push_back(0);
+        Ptxt mask_from_to(int from, int to, int target_depth)
+        {
+            std::vector<double> vec(num_slots, 0.0);
+            for (int i = from; i < std::min(to, num_slots); i++)
+            {
+                vec[static_cast<size_t>(i)] = 1.0;
+            }
+            return encode(vec, target_depth, num_slots);
+        }
+
+      private:
+        heongpu::HEContext<Scheme> context_;
+        std::unique_ptr<heongpu::HEKeyGenerator<Scheme>> keygen_;
+        std::unique_ptr<heongpu::Secretkey<Scheme>> secret_key_;
+        std::unique_ptr<heongpu::Publickey<Scheme>> public_key_;
+        std::unique_ptr<heongpu::Relinkey<Scheme>> relin_key_;
+        std::unique_ptr<heongpu::Galoiskey<Scheme>> galois_key_;
+        std::unique_ptr<heongpu::HEEncoder<Scheme>> encoder_;
+        std::unique_ptr<heongpu::HEEncryptor<Scheme>> encryptor_;
+        std::unique_ptr<heongpu::HEDecryptor<Scheme>> decryptor_;
+        std::unique_ptr<heongpu::HEArithmeticOperator<Scheme>> operators_;
+        std::unique_ptr<heongpu::Switchkey<Scheme>> swk_dense_to_sparse_;
+        std::unique_ptr<heongpu::Switchkey<Scheme>> swk_sparse_to_dense_;
+
+        double default_scale_ = std::pow(2.0, 50);
+        std::unordered_map<std::string, std::vector<double>> relu_cache_;
+
+        static std::vector<int> unique_sorted(std::vector<int> values)
+        {
+            std::sort(values.begin(), values.end());
+            values.erase(std::unique(values.begin(), values.end()),
+                         values.end());
+            return values;
+        }
+
+        static std::vector<double>
+        chebyshev_to_monomial(const std::vector<Complex64>& cheb, double a,
+                              double b)
+        {
+            const int degree = static_cast<int>(cheb.size()) - 1;
+            std::vector<double> poly_t(static_cast<size_t>(degree + 1), 0.0);
+
+            std::vector<double> T_prev(1, 1.0);
+            std::vector<double> T_curr(2, 0.0);
+            T_curr[1] = 1.0;
+
+            auto add_scaled = [&](const std::vector<double>& src, double scale)
+            {
+                if (src.empty())
+                {
+                    return;
+                }
+                if (poly_t.size() < src.size())
+                {
+                    poly_t.resize(src.size(), 0.0);
+                }
+                for (size_t i = 0; i < src.size(); i++)
+                {
+                    poly_t[i] += src[i] * scale;
+                }
+            };
+
+            add_scaled(T_prev, cheb[0].real());
+            if (degree >= 1)
+            {
+                add_scaled(T_curr, cheb[1].real());
+            }
+
+            for (int k = 2; k <= degree; k++)
+            {
+                std::vector<double> T_next(T_curr.size() + 1, 0.0);
+                for (size_t i = 0; i < T_curr.size(); i++)
+                {
+                    T_next[i + 1] += 2.0 * T_curr[i];
+                }
+                for (size_t i = 0; i < T_prev.size(); i++)
+                {
+                    T_next[i] -= T_prev[i];
+                }
+                add_scaled(T_next, cheb[static_cast<size_t>(k)].real());
+                T_prev = T_curr;
+                T_curr = std::move(T_next);
+            }
+
+            double alpha = 2.0 / (b - a);
+            double beta = -(a + b) / (b - a);
+
+            std::vector<double> poly_x(1, 0.0);
+            std::vector<double> pow_poly(1, 1.0);
+
+            for (int i = 0; i <= degree; i++)
+            {
+                if (poly_x.size() < pow_poly.size())
+                {
+                    poly_x.resize(pow_poly.size(), 0.0);
+                }
+                for (size_t j = 0; j < pow_poly.size(); j++)
+                {
+                    poly_x[j] += poly_t[static_cast<size_t>(i)] * pow_poly[j];
+                }
+
+                std::vector<double> next_pow(pow_poly.size() + 1, 0.0);
+                for (size_t j = 0; j < pow_poly.size(); j++)
+                {
+                    next_pow[j] += pow_poly[j] * beta;
+                    next_pow[j + 1] += pow_poly[j] * alpha;
+                }
+                pow_poly = std::move(next_pow);
+            }
+
+            return poly_x;
+        }
+
+        std::vector<double> relu_coefficients(double scale, int degree)
+        {
+            std::string key =
+                std::to_string(scale) + "|" + std::to_string(degree);
+            auto it = relu_cache_.find(key);
+            if (it != relu_cache_.end())
+            {
+                return it->second;
+            }
+
+            auto func = [scale](Complex64 x) -> Complex64
+            {
+                double real = x.real();
+                if (real < 0)
+                {
+                    return Complex64(0.0, 0.0);
+                }
+                return Complex64(real / scale, 0.0);
+            };
+
+            std::vector<Complex64> cheb =
+                heongpu::approximate_function(func, -1.0, 1.0, degree);
+            std::vector<double> mono = chebyshev_to_monomial(cheb, -1.0, 1.0);
+            relu_cache_[key] = mono;
+            return mono;
+        }
+
+        Ptxt encode_mask(const std::vector<double>& vec, int target_depth)
+        {
+            if (debug_cuda && debug_encode)
+            {
+                debug_label = "mask encode";
+                std::cout << "encode_mask depth=" << target_depth
+                          << " slots=" << vec.size() << std::endl;
+            }
+            Ptxt plain = encode_full_with_scale(vec, 1.0, vec.size());
+            drop_plain_to_depth(plain, target_depth);
+            check_cuda("encode_mask");
+            return plain;
+        }
+
+        std::vector<int> collect_required_shifts() const
+        {
+            std::vector<int> shifts = {
+                1,    -1,    2,    -2,    4,     -4,     7,     -7,
+                8,    -8,    9,    -9,    15,    -15,    16,    -16,
+                17,   -17,   24,   -24,   31,    -31,    32,    -32,
+                33,   -33,   48,   -48,   63,    -63,    64,    -64,
+                128,  -128,  192,  -192,  256,   -256,   512,   -512,
+                768,  -768,  1024, -1024, 2048,  -2048,  3072,  -3072,
+                4096, -4096, 8192, -8192, 12288, -12288, 24576, -24576};
+
+            const int actual_slots =
+                static_cast<int>(context_.get_poly_modulus_degree() / 2);
+            const int half_slots = actual_slots / 2;
+            if (half_slots > 0)
+            {
+                const size_t base_size = shifts.size();
+                shifts.reserve(base_size * 2);
+                for (size_t i = 0; i < base_size; ++i)
+                {
+                    const int s = shifts[i];
+                    shifts.push_back(s + half_slots);
+                }
+            }
+            return unique_sorted(shifts);
+        }
+
+        Ptxt encode_full(const std::vector<double>& vec,
+                         int plaintext_num_slots)
+        {
+            return encode_full_with_scale(vec, default_scale_,
+                                          plaintext_num_slots);
+        }
+
+        void drop_to_depth(Ctxt& c, int target_depth)
+        {
+            while (c.depth() < target_depth)
+            {
+                operators_->mod_drop_inplace(c);
             }
         }
 
-        for (int i = 0; i < 256; i++) {
-            mask.push_back(1);
-        }
-
-        for (int i = 0; i < 1024 - 256; i++) {
-            mask.push_back(0);
-        }
-
-        for (int i = 0; i < 31 - n; i++) {
-            for (int j = 0; j < 1024; j++) {
-                mask.push_back(0);
+        void drop_plain_to_depth(Ptxt& p, int target_depth)
+        {
+            while (p.depth() < target_depth)
+            {
+                operators_->mod_drop_inplace(p);
             }
         }
 
-        return encode(mask, target_depth, static_cast<int>(mask.size()));
-    }
-
-    Ptxt mask_channel_2(int n, int target_depth)
-    {
-        std::vector<double> mask;
-        mask.reserve(8192 * 2);
-
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < 256; j++) {
-                mask.push_back(0);
+        Ptxt encode_full_with_scale(const std::vector<double>& vec,
+                                    double scale, int plaintext_num_slots)
+        {
+            if (plaintext_num_slots <= 0)
+            {
+                plaintext_num_slots = num_slots;
             }
-        }
-
-        for (int i = 0; i < 64; i++) {
-            mask.push_back(1);
-        }
-
-        for (int i = 0; i < 256 - 64; i++) {
-            mask.push_back(0);
-        }
-
-        for (int i = 0; i < 63 - n; i++) {
-            for (int j = 0; j < 256; j++) {
-                mask.push_back(0);
+            const int base_slots =
+                (full_num_slots > 0) ? full_num_slots : num_slots;
+            std::vector<double> msg = vec;
+            if (static_cast<int>(msg.size()) < plaintext_num_slots)
+            {
+                msg.resize(static_cast<size_t>(plaintext_num_slots), 0.0);
             }
-        }
-
-        return encode(mask, target_depth, static_cast<int>(mask.size()));
-    }
-
-    Ptxt mask_mod(int n, int target_depth, double custom_val)
-    {
-        std::vector<double> vec(num_slots, 0.0);
-        for (int i = 0; i < num_slots; i++) {
-            if (i % n == 0) {
-                vec[static_cast<size_t>(i)] = custom_val;
+            if (plaintext_num_slots < base_slots &&
+                (base_slots % plaintext_num_slots == 0))
+            {
+                std::vector<double> expanded(static_cast<size_t>(base_slots));
+                for (int i = 0; i < base_slots; ++i)
+                {
+                    expanded[static_cast<size_t>(i)] =
+                        msg[static_cast<size_t>(i % plaintext_num_slots)];
+                }
+                msg.swap(expanded);
             }
+            if (debug_cuda && debug_encode)
+            {
+                std::cout << "encode_full scale=" << scale
+                          << " slots=" << plaintext_num_slots
+                          << " msg_size=" << msg.size() << std::endl;
+            }
+            Ptxt plain(context_);
+            encoder_->encode(plain, msg, scale);
+            check_cuda("encode_full");
+            return plain;
         }
-        return encode(vec, target_depth, num_slots);
-    }
 
-    Ptxt mask_from_to(int from, int to, int target_depth)
-    {
-        std::vector<double> vec(num_slots, 0.0);
-        for (int i = from; i < std::min(to, num_slots); i++) {
-            vec[static_cast<size_t>(i)] = 1.0;
-        }
-        return encode(vec, target_depth, num_slots);
-    }
-
-  private:
-    heongpu::HEContext<Scheme> context_;
-    std::unique_ptr<heongpu::HEKeyGenerator<Scheme>> keygen_;
-    std::unique_ptr<heongpu::Secretkey<Scheme>> secret_key_;
-    std::unique_ptr<heongpu::Publickey<Scheme>> public_key_;
-    std::unique_ptr<heongpu::Relinkey<Scheme>> relin_key_;
-    std::unique_ptr<heongpu::Galoiskey<Scheme>> galois_key_;
-    std::unique_ptr<heongpu::HEEncoder<Scheme>> encoder_;
-    std::unique_ptr<heongpu::HEEncryptor<Scheme>> encryptor_;
-    std::unique_ptr<heongpu::HEDecryptor<Scheme>> decryptor_;
-    std::unique_ptr<heongpu::HEArithmeticOperator<Scheme>> operators_;
-    std::unique_ptr<heongpu::Switchkey<Scheme>> swk_dense_to_sparse_;
-    std::unique_ptr<heongpu::Switchkey<Scheme>> swk_sparse_to_dense_;
-
-    double default_scale_ = std::pow(2.0, 50);
-    std::unordered_map<std::string, std::vector<double>> relu_cache_;
-
-    static std::vector<int> unique_sorted(std::vector<int> values)
-    {
-        std::sort(values.begin(), values.end());
-        values.erase(std::unique(values.begin(), values.end()), values.end());
-        return values;
-    }
-
-    static std::vector<double> chebyshev_to_monomial(
-        const std::vector<Complex64>& cheb, double a, double b)
-    {
-        const int degree = static_cast<int>(cheb.size()) - 1;
-        std::vector<double> poly_t(static_cast<size_t>(degree + 1), 0.0);
-
-        std::vector<double> T_prev(1, 1.0);
-        std::vector<double> T_curr(2, 0.0);
-        T_curr[1] = 1.0;
-
-        auto add_scaled = [&](const std::vector<double>& src, double scale) {
-            if (src.empty()) {
+        void check_cuda(const char* label)
+        {
+            if (!debug_cuda)
+            {
                 return;
             }
-            if (poly_t.size() < src.size()) {
-                poly_t.resize(src.size(), 0.0);
+            cudaError_t err = cudaDeviceSynchronize();
+            if (err != cudaSuccess)
+            {
+                std::cerr << "CUDA error after " << label;
+                if (!debug_label.empty())
+                {
+                    std::cerr << " [" << debug_label << "]";
+                }
+                std::cerr << ": " << cudaGetErrorString(err) << std::endl;
+                throw std::runtime_error("CUDA failure");
             }
-            for (size_t i = 0; i < src.size(); i++) {
-                poly_t[i] += src[i] * scale;
-            }
-        };
-
-        add_scaled(T_prev, cheb[0].real());
-        if (degree >= 1) {
-            add_scaled(T_curr, cheb[1].real());
+            cudaGetLastError();
         }
 
-        for (int k = 2; k <= degree; k++) {
-            std::vector<double> T_next(T_curr.size() + 1, 0.0);
-            for (size_t i = 0; i < T_curr.size(); i++) {
-                T_next[i + 1] += 2.0 * T_curr[i];
-            }
-            for (size_t i = 0; i < T_prev.size(); i++) {
-                T_next[i] -= T_prev[i];
-            }
-            add_scaled(T_next, cheb[static_cast<size_t>(k)].real());
-            T_prev = T_curr;
-            T_curr = std::move(T_next);
-        }
-
-        double alpha = 2.0 / (b - a);
-        double beta = -(a + b) / (b - a);
-
-        std::vector<double> poly_x(1, 0.0);
-        std::vector<double> pow_poly(1, 1.0);
-
-        for (int i = 0; i <= degree; i++) {
-            if (poly_x.size() < pow_poly.size()) {
-                poly_x.resize(pow_poly.size(), 0.0);
-            }
-            for (size_t j = 0; j < pow_poly.size(); j++) {
-                poly_x[j] += poly_t[static_cast<size_t>(i)] * pow_poly[j];
-            }
-
-            std::vector<double> next_pow(pow_poly.size() + 1, 0.0);
-            for (size_t j = 0; j < pow_poly.size(); j++) {
-                next_pow[j] += pow_poly[j] * beta;
-                next_pow[j + 1] += pow_poly[j] * alpha;
-            }
-            pow_poly = std::move(next_pow);
-        }
-
-        return poly_x;
-    }
-
-    std::vector<double> relu_coefficients(double scale, int degree)
-    {
-        std::string key = std::to_string(scale) + "|" + std::to_string(degree);
-        auto it = relu_cache_.find(key);
-        if (it != relu_cache_.end()) {
-            return it->second;
-        }
-
-        auto func = [scale](Complex64 x) -> Complex64 {
-            double real = x.real();
-            if (real < 0) {
-                return Complex64(0.0, 0.0);
-            }
-            return Complex64(real / scale, 0.0);
-        };
-
-        std::vector<Complex64> cheb =
-            heongpu::approximate_function(func, -1.0, 1.0, degree);
-        std::vector<double> mono = chebyshev_to_monomial(cheb, -1.0, 1.0);
-        relu_cache_[key] = mono;
-        return mono;
-    }
-
-    Ptxt encode_mask(const std::vector<double>& vec, int target_depth)
-    {
-        if (debug_cuda && debug_encode) {
-            debug_label = "mask encode";
-            std::cout << "encode_mask depth=" << target_depth
-                      << " slots=" << vec.size() << std::endl;
-        }
-        Ptxt plain = encode_full_with_scale(vec, 1.0, vec.size());
-        drop_plain_to_depth(plain, target_depth);
-        check_cuda("encode_mask");
-        return plain;
-    }
-
-    std::vector<int> collect_required_shifts() const
-    {
-        std::vector<int> shifts = {
-            1, -1, 2, -2, 4, -4, 7, -7, 8, -8, 9, -9, 15, -15, 16, -16, 17,
-            -17, 24, -24, 31, -31, 32, -32, 33, -33, 48, -48, 63, -63, 64,
-            -64, 128, -128, 192, -192, 256, -256, 512, -512, 768, -768, 1024,
-            -1024, 2048, -2048, 3072, -3072, 4096, -4096, 8192, -8192,
-            12288, -12288, 24576, -24576
-        };
-
-        const int actual_slots =
-            static_cast<int>(context_.get_poly_modulus_degree() / 2);
-        const int half_slots = actual_slots / 2;
-        if (half_slots > 0) {
-            const size_t base_size = shifts.size();
-            shifts.reserve(base_size * 2);
-            for (size_t i = 0; i < base_size; ++i) {
-                const int s = shifts[i];
-                shifts.push_back(s + half_slots);
-            }
-        }
-        return unique_sorted(shifts);
-    }
-
-    Ptxt encode_full(const std::vector<double>& vec, int plaintext_num_slots)
-    {
-        return encode_full_with_scale(vec, default_scale_, plaintext_num_slots);
-    }
-
-    void drop_to_depth(Ctxt& c, int target_depth)
-    {
-        while (c.depth() < target_depth) {
-            operators_->mod_drop_inplace(c);
-        }
-    }
-
-    void drop_plain_to_depth(Ptxt& p, int target_depth)
-    {
-        while (p.depth() < target_depth) {
-            operators_->mod_drop_inplace(p);
-        }
-    }
-
-    Ptxt encode_full_with_scale(const std::vector<double>& vec, double scale,
-                                int plaintext_num_slots)
-    {
-        if (plaintext_num_slots <= 0) {
-            plaintext_num_slots = num_slots;
-        }
-        const int base_slots = (full_num_slots > 0) ? full_num_slots : num_slots;
-        std::vector<double> msg = vec;
-        if (static_cast<int>(msg.size()) < plaintext_num_slots) {
-            msg.resize(static_cast<size_t>(plaintext_num_slots), 0.0);
-        }
-        if (plaintext_num_slots < base_slots &&
-            (base_slots % plaintext_num_slots == 0)) {
-            std::vector<double> expanded(static_cast<size_t>(base_slots));
-            for (int i = 0; i < base_slots; ++i) {
-                expanded[static_cast<size_t>(i)] =
-                    msg[static_cast<size_t>(i % plaintext_num_slots)];
-            }
-            msg.swap(expanded);
-        }
-        if (debug_cuda && debug_encode) {
-            std::cout << "encode_full scale=" << scale
-                      << " slots=" << plaintext_num_slots
-                      << " msg_size=" << msg.size() << std::endl;
-        }
-        Ptxt plain(context_);
-        encoder_->encode(plain, msg, scale);
-        check_cuda("encode_full");
-        return plain;
-    }
-
-    void check_cuda(const char* label)
-    {
-        if (!debug_cuda) {
-            return;
-        }
-        cudaError_t err = cudaDeviceSynchronize();
-        if (err != cudaSuccess) {
-            std::cerr << "CUDA error after " << label;
-            if (!debug_label.empty()) {
+        void report_exception(const char* op, const std::exception& ex) const
+        {
+            std::cerr << "Exception in " << op;
+            if (!debug_label.empty())
+            {
                 std::cerr << " [" << debug_label << "]";
             }
-            std::cerr << ": "
-                      << cudaGetErrorString(err) << std::endl;
-            throw std::runtime_error("CUDA failure");
+            std::cerr << ": " << ex.what() << std::endl;
         }
-        cudaGetLastError();
-    }
-
-    void report_exception(const char* op, const std::exception& ex) const
-    {
-        std::cerr << "Exception in " << op;
-        if (!debug_label.empty()) {
-            std::cerr << " [" << debug_label << "]";
-        }
-        std::cerr << ": " << ex.what() << std::endl;
-    }
-};
+    };
 
 } // namespace lowmem
 
