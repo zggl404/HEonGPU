@@ -1327,7 +1327,7 @@ class FHEController {
                 copy_interval = n;
             }
         }
-        return encode_mask(mask, target_depth);
+        return encode(mask, target_depth, num_slots);
     }
 
     Ptxt mask_first_n(int n, int target_depth)
@@ -1336,7 +1336,7 @@ class FHEController {
         for (int i = 0; i < std::min(n, num_slots); i++) {
             mask[static_cast<size_t>(i)] = 1.0;
         }
-        return encode_mask(mask, target_depth);
+        return encode(mask, target_depth, num_slots);
     }
 
     Ptxt mask_second_n(int n, int target_depth)
@@ -1345,7 +1345,7 @@ class FHEController {
         for (int i = n; i < num_slots; i++) {
             mask[static_cast<size_t>(i)] = 1.0;
         }
-        return encode_mask(mask, target_depth);
+        return encode(mask, target_depth, num_slots);
     }
 
     Ptxt mask_first_n_mod(int n, int padding, int pos, int target_depth)
@@ -1363,7 +1363,7 @@ class FHEController {
                 mask.push_back(0);
             }
         }
-        return encode_mask(mask, target_depth);
+        return encode(mask, target_depth, static_cast<int>(mask.size()));
     }
 
     Ptxt mask_first_n_mod2(int n, int padding, int pos, int target_depth)
@@ -1381,7 +1381,7 @@ class FHEController {
                 mask.push_back(0);
             }
         }
-        return encode_mask(mask, target_depth);
+        return encode(mask, target_depth, static_cast<int>(mask.size()));
     }
 
     Ptxt mask_channel(int n, int target_depth)
@@ -1409,7 +1409,7 @@ class FHEController {
             }
         }
 
-        return encode_mask(mask, target_depth);
+        return encode(mask, target_depth, static_cast<int>(mask.size()));
     }
 
     Ptxt mask_channel_2(int n, int target_depth)
@@ -1437,7 +1437,7 @@ class FHEController {
             }
         }
 
-        return encode_mask(mask, target_depth);
+        return encode(mask, target_depth, static_cast<int>(mask.size()));
     }
 
     Ptxt mask_mod(int n, int target_depth, double custom_val)
@@ -1457,7 +1457,7 @@ class FHEController {
         for (int i = from; i < std::min(to, num_slots); i++) {
             vec[static_cast<size_t>(i)] = 1.0;
         }
-        return encode_mask(vec, target_depth);
+        return encode(vec, target_depth, num_slots);
     }
 
   private:
