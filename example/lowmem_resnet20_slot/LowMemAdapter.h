@@ -635,7 +635,7 @@ namespace lowmem
             }
             std::printf(" ]\n");
             std::printf("[DBG_META] %s level=%d scale=%.6e\n", tag.c_str(),
-                        c.level(), c.scale());
+                        c.level(), log2(c.scale()));
         }
 
         void print_dbg(const Ptxt& p, int slots, const std::string& tag)
@@ -653,7 +653,7 @@ namespace lowmem
             }
             std::printf(" ]\n");
             std::printf("[DBG_META] %s depth=%d scale=%.6e\n", tag.c_str(),
-                        p.depth(), p.scale());
+                        p.depth(), log2(p.scale()));
         }
 
         void print_dbg_values(const std::vector<double>& v, int slots,
