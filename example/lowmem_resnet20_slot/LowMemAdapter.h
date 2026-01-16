@@ -1653,6 +1653,15 @@ class FHEController {
         if (static_cast<int>(msg.size()) < plaintext_num_slots) {
             msg.resize(static_cast<size_t>(plaintext_num_slots), 0.0);
         }
+        if (plaintext_num_slots < num_slots &&
+            (num_slots % plaintext_num_slots == 0)) {
+            std::vector<double> expanded(static_cast<size_t>(num_slots));
+            for (int i = 0; i < num_slots; ++i) {
+                expanded[static_cast<size_t>(i)] =
+                    msg[static_cast<size_t>(i % plaintext_num_slots)];
+            }
+            msg.swap(expanded);
+        }
         if (debug_cuda && debug_encode) {
             std::cout << "encode_full scale=" << scale
                       << " slots=" << plaintext_num_slots
