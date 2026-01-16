@@ -396,20 +396,11 @@ class FHEController {
 
     Ctxt rotate_vector(const Ctxt& c, int steps)
     {
-        const int actual_slots =
-            static_cast<int>(context_.get_poly_modulus_degree() / 2);
-        int adj_steps = steps;
-        if (num_slots > 0 && num_slots != actual_slots &&
-            actual_slots % num_slots == 0) {
-            const int offset = actual_slots - num_slots;
-            if (offset == num_slots) {
-                adj_steps = steps + ((steps >= 0) ? offset : -offset);
-            }
-        }
+        
         Ctxt out(context_);
         try {
             operators_->rotate_rows(const_cast<Ctxt&>(c), out, *galois_key_,
-                                    adj_steps);
+                                    steps);
         } catch (const std::exception& ex) {
             report_exception("rotate", ex);
             throw;
