@@ -1610,17 +1610,6 @@ class FHEController {
             12288, -12288, 24576, -24576
         };
 
-        const int actual_slots =
-            static_cast<int>(context_.get_poly_modulus_degree() / 2);
-        const int half_slots = actual_slots / 2;
-        if (half_slots > 0) {
-            const size_t base_size = shifts.size();
-            shifts.reserve(base_size * 2);
-            for (size_t i = 0; i < base_size; ++i) {
-                const int s = shifts[i];
-                shifts.push_back(s + half_slots);
-            }
-        }
         return unique_sorted(shifts);
     }
 
