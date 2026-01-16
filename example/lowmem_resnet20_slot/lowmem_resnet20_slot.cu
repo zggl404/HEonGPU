@@ -24,6 +24,7 @@ static std::string weights_dir;
 static std::string input_filename = "luis.png";
 static int verbose = 0;
 static bool plain = false;
+static std::string dbg_filter;
 static DebugDumper dbg_dumper(&controller);
 
 static void parse_args(int argc, char* argv[])
@@ -40,6 +41,8 @@ static void parse_args(int argc, char* argv[])
             verbose = std::atoi(argv[++i]);
         } else if (arg == "--plain") {
             plain = true;
+        } else if (arg == "--dbg_filter" && i + 1 < argc) {
+            dbg_filter = argv[++i];
         }
     }
 }
@@ -571,6 +574,7 @@ int main(int argc, char* argv[])
     controller.weights_dir = weights_dir;
     controller.initialize(cfg);
     dbg_dumper.set_enabled(true);
+    dbg_dumper.set_layer_regex(dbg_filter);
 
     execute_resnet20();
 
