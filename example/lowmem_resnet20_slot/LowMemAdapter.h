@@ -547,6 +547,23 @@ class FHEController {
         std::cout << std::endl;
     }
 
+    void print_dbg(const Ctxt& c, int slots, const std::string& tag)
+    {
+        std::vector<double> v = decrypt_tovector(c, slots);
+        const int limit =
+            std::min(slots, static_cast<int>(v.size()));
+        std::printf("[DBG] %s: [ ", tag.c_str());
+        for (int i = 0; i < limit; i++) {
+            std::printf("%7.3f", v[static_cast<size_t>(i)]);
+            if (i + 1 < limit) {
+                std::printf(", ");
+            }
+        }
+        std::printf(" ]\n");
+        std::printf("[DBG_META] %s level=%d scale=%.6e\n", tag.c_str(),
+                    c.level(), c.scale());
+    }
+
     void print_min_max(const Ctxt& c)
     {
         std::vector<double> v = decrypt_tovector(c, num_slots);
@@ -626,9 +643,16 @@ class FHEController {
                 sum = add(sum, k_rows[i]);
             }
 
+            print_dbg(sum, 20, "Initial layer convbn_initial/j" +
+                                  std::to_string(j) + "/sum (post)");
+
             Ctxt res = add(sum, rotate_vector(sum, 1024));
             res = add(res, rotate_vector(rotate_vector(sum, 1024), 1024));
+            print_dbg(res, 20, "Initial layer convbn_initial/j" +
+                                  std::to_string(j) + "/res (pre-mask)");
             res = mult(res, mask_from_to(0, 1024, res.depth()));
+            print_dbg(res, 20, "Initial layer convbn_initial/j" +
+                                  std::to_string(j) + "/res (post-mask)");
 
             if (!init) {
                 finalsum = rotate_vector(res, 1024);
@@ -637,6 +661,9 @@ class FHEController {
                 finalsum = add(finalsum, res);
                 finalsum = rotate_vector(finalsum, 1024);
             }
+            print_dbg(finalsum, 20, "Initial layer convbn_initial/j" +
+                                       std::to_string(j) +
+                                       "/finalsum (post)");
             
         }
 
