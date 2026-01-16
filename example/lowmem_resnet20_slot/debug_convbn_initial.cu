@@ -130,8 +130,7 @@ int main(int argc, char* argv[])
     controller.num_slots = 16384;
     Ctxt in = controller.encrypt(
         input_image,
-        controller.circuit_depth - 4 -
-            utils::get_relu_depth(controller.relu_degree),
+        controller.circuit_depth - 1
         16384);
 
     const std::string bias_path = weights_dir + "/conv1bn1-bias.bin";

@@ -91,6 +91,8 @@ namespace lowmem
         int circuit_depth = 0;
         int num_slots = 0;
         int full_num_slots = 0;
+        int min_40bit_depth = -1;
+        int max_40bit_depth = -1;
         int relu_degree = 119;
         std::string weights_dir;
         bool debug_cuda = false;
@@ -135,6 +137,45 @@ namespace lowmem
                 static_cast<int>(context_.get_poly_modulus_degree() / 2);
             full_num_slots = num_slots;
             circuit_depth = context_.get_ciphertext_modulus_count() - 1;
+
+            std::vector<int> q_bits;
+            if (cfg.use_manual_moduli && !cfg.q_modulus_values.empty())
+            {
+                q_bits.reserve(cfg.q_modulus_values.size());
+                for (auto value : cfg.q_modulus_values)
+                {
+                    int bits = 0;
+                    while (value != 0)
+                    {
+                        ++bits;
+                        value >>= 1;
+                    }
+                    q_bits.push_back(bits);
+                }
+            }
+            else
+            {
+                q_bits = cfg.coeff_modulus_bits;
+            }
+
+            int first_40 = -1;
+            int last_40 = -1;
+            for (size_t i = 0; i < q_bits.size(); ++i)
+            {
+                if (q_bits[i] == 40)
+                {
+                    if (first_40 < 0)
+                    {
+                        first_40 = static_cast<int>(i);
+                    }
+                    last_40 = static_cast<int>(i);
+                }
+            }
+            if (first_40 >= 0)
+            {
+                min_40bit_depth = first_40;
+                max_40bit_depth = last_40;
+            }
 
             keygen_ =
                 std::make_unique<heongpu::HEKeyGenerator<Scheme>>(context_);
@@ -1912,17 +1953,46 @@ namespace lowmem
 
         void drop_to_depth(Ctxt& c, int target_depth)
         {
+            if (min_40bit_depth >= 0)
+            {
+                target_depth = std::max(target_depth, min_40bit_depth);
+            }
+            if (max_40bit_depth >= 0 && target_depth > max_40bit_depth)
+            {
+                target_depth = max_40bit_depth;
+            }
             while (c.depth() < target_depth)
             {
                 operators_->mod_drop_inplace(c);
+            }
+            if (max_40bit_depth >= 0 && c.depth() > max_40bit_depth)
+            {
+                std::cerr << "depth exceeds 40-bit range: depth=" << c.depth()
+                          << " max_40bit_depth=" << max_40bit_depth
+                          << std::endl;
             }
         }
 
         void drop_plain_to_depth(Ptxt& p, int target_depth)
         {
+            if (min_40bit_depth >= 0)
+            {
+                target_depth = std::max(target_depth, min_40bit_depth);
+            }
+            if (max_40bit_depth >= 0 && target_depth > max_40bit_depth)
+            {
+                target_depth = max_40bit_depth;
+            }
             while (p.depth() < target_depth)
             {
                 operators_->mod_drop_inplace(p);
+            }
+            if (max_40bit_depth >= 0 && p.depth() > max_40bit_depth)
+            {
+                std::cerr << "plaintext depth exceeds 40-bit range: depth="
+                          << p.depth()
+                          << " max_40bit_depth=" << max_40bit_depth
+                          << std::endl;
             }
         }
 
