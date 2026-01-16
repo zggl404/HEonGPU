@@ -680,6 +680,7 @@ namespace heongpu
         int n = coeff_count;
         int m32 = n * 2;
         int m = m32;
+        std::cout<<"the steps is "<<steps<<" and the n>>1 is "<<(n>>1)<<std::endl;
 
         if (steps == 0)
         {
