@@ -655,6 +655,24 @@ namespace lowmem
             std::printf("[DBG_META] %s depth=%d scale=%.6e\n", tag.c_str(),
                         p.depth(), p.scale());
         }
+
+        void print_dbg_values(const std::vector<double>& v, int slots,
+                              const std::string& tag)
+        {
+            const int limit = std::min(slots, static_cast<int>(v.size()));
+            std::printf("[DBG] %s: [ ", tag.c_str());
+            for (int i = 0; i < limit; i++)
+            {
+                std::printf("%7.3f", v[static_cast<size_t>(i)]);
+                if (i + 1 < limit)
+                {
+                    std::printf(", ");
+                }
+            }
+            std::printf(" ]\n");
+            std::printf("[DBG_META] %s size=%d\n", tag.c_str(),
+                        static_cast<int>(v.size()));
+        }
         
         void print_min_max(const Ctxt& c)
         {
@@ -705,10 +723,14 @@ namespace lowmem
             {
                 debug_label = "convbn_initial bias encode";
             }
-            std::vector<double> bias_values = utils::read_values_from_file(
-                weights_dir + "/conv1bn1-bias.bin", scale);
-            
-            Ctxt finalsum(context_);
+        std::vector<double> bias_values = utils::read_values_from_file(
+            weights_dir + "/conv1bn1-bias.bin", scale);
+        if (debug_cuda && debug_encode)
+        {
+            print_dbg_values(bias_values, 20, "convbn_initial/bias_values");
+        }
+
+        Ctxt finalsum(context_);
             bool init = false;
 
             for (int j = 0; j < 16; j++)
