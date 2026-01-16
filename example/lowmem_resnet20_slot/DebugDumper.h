@@ -74,8 +74,6 @@ class DebugDumper {
         }
         std::ifstream in(path);
         if (!in) {
-            std::printf("[DIFF] failed_to_open_reference_log=%s\n",
-                        path.c_str());
             return false;
         }
         std::regex line_re(R"(\[DBG\]\s+(.+?):\s*\[(.*)\])");
@@ -95,7 +93,6 @@ class DebugDumper {
             }
         }
         ref_loaded_ = !ref_.empty();
-        std::printf("[DIFF] reference_loaded=%zu\n", count);
         return ref_loaded_;
     }
 
@@ -110,13 +107,6 @@ class DebugDumper {
                 ++bad_count;
             }
         }
-        if (!first_bad_tag_.empty()) {
-            std::printf("[DIFF] first_bad_tag=%s\n", first_bad_tag_.c_str());
-        } else {
-            std::printf("[DIFF] first_bad_tag=<none>\n");
-        }
-        std::printf("[DIFF] summary: compared=%zu bad=%d\n",
-                    diff_entries_.size(), bad_count);
         write_json(json_path);
     }
 
@@ -157,20 +147,10 @@ class DebugDumper {
     {
         const int limit =
             std::min(count, static_cast<int>(vals.size()));
-        std::printf("[DBG] %s: [ ", tag.c_str());
-        for (int i = 0; i < limit; ++i) {
-            std::printf("%7.3f", vals[static_cast<size_t>(i)]);
-            if (i + 1 < limit) {
-                std::printf(", ");
-            }
-        }
-        std::printf(" ]\n");
     }
 
     void print_meta(const std::string& tag, int level, double scale) const
     {
-        std::printf("[DBG_META] %s level=%d scale=%.6e\n", tag.c_str(), level,
-                    scale);
     }
 
     static std::vector<double> parse_list(const std::string& list)
@@ -223,7 +203,6 @@ class DebugDumper {
     {
         auto it = ref_.find(tag);
         if (it == ref_.end()) {
-            std::printf("[DIFF] missing_reference tag=%s\n", tag.c_str());
             return;
         }
         const std::vector<double>& cpu_vals = it->second;
@@ -256,17 +235,12 @@ class DebugDumper {
                   [](const auto& a, const auto& b) {
                       return a.second > b.second;
                   });
-        std::printf("[DIFF] %s max_abs_error=%.6e max_rel_error=%.6e "
-                    "first_mismatch_index=%d\n",
-                    tag.c_str(), max_abs, max_rel, first_mismatch);
         const int topn = std::min(5, static_cast<int>(abs_errors.size()));
         for (int i = 0; i < topn; ++i) {
             const int idx = abs_errors[static_cast<size_t>(i)].first;
             const double cpu = cpu_vals[static_cast<size_t>(idx)];
             const double gpu = gpu_vals[static_cast<size_t>(idx)];
             const double diff = cpu - gpu;
-            std::printf("[DIFF] top%d i=%d cpu=%.6e gpu=%.6e diff=%.6e\n",
-                        i + 1, idx, cpu, gpu, diff);
         }
 
         DiffEntry entry;
@@ -295,7 +269,6 @@ class DebugDumper {
         }
         std::ofstream out(path);
         if (!out) {
-            std::printf("[DIFF] failed_to_write_json=%s\n", path.c_str());
             return;
         }
         out << "[\n";

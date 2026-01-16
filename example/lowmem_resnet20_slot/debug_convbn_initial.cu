@@ -21,12 +21,6 @@ static DebugDumper dbg_dumper(&controller);
 static std::string data_dir;
 static std::string weights_dir;
 static std::string input_filename = "luis.png";
-static std::string reference_log_path;
-static double tol_abs = 1e-2;
-static double tol_rel = 1e-2;
-static int dbg_count = 20;
-static std::string diff_report_path =
-    "output/diff_report_convbn_initial.json";
 
 static void parse_args(int argc, char* argv[])
 {
@@ -38,16 +32,6 @@ static void parse_args(int argc, char* argv[])
             weights_dir = argv[++i];
         } else if (arg == "--input" && i + 1 < argc) {
             input_filename = argv[++i];
-        } else if (arg == "--reference_log" && i + 1 < argc) {
-            reference_log_path = argv[++i];
-        } else if (arg == "--tol_abs" && i + 1 < argc) {
-            tol_abs = std::atof(argv[++i]);
-        } else if (arg == "--tol_rel" && i + 1 < argc) {
-            tol_rel = std::atof(argv[++i]);
-        } else if (arg == "--dbg_count" && i + 1 < argc) {
-            dbg_count = std::atoi(argv[++i]);
-        } else if (arg == "--diff_report" && i + 1 < argc) {
-            diff_report_path = argv[++i];
         }
     }
 }
@@ -101,21 +85,9 @@ static void print_vector_stats(const std::string& label,
                                const std::vector<double>& values)
 {
     if (values.empty()) {
-        std::cout << "[STATS] " << label << " size=0" << std::endl;
         return;
     }
     auto minmax = std::minmax_element(values.begin(), values.end());
-    std::cout << "[STATS] " << label << " size=" << values.size()
-              << " min=" << *minmax.first << " max=" << *minmax.second
-              << " first5=[";
-    const size_t limit = std::min<size_t>(5, values.size());
-    for (size_t i = 0; i < limit; ++i) {
-        if (i > 0) {
-            std::cout << ", ";
-        }
-        std::cout << values[i];
-    }
-    std::cout << "]" << std::endl;
 }
 
 int main(int argc, char* argv[])
@@ -140,17 +112,12 @@ int main(int argc, char* argv[])
     } else {
         weights_dir = resolve_path(repo_root, weights_dir).string();
     }
-    std::cout << "[STATS] weights_dir=" << weights_dir << std::endl;
-
     HEConfig cfg;
     cfg.relu_degree = controller.relu_degree;
     controller.weights_dir = weights_dir;
     controller.initialize(cfg);
 
     dbg_dumper.set_enabled(true);
-    dbg_dumper.set_count(dbg_count);
-    dbg_dumper.set_tolerances(tol_abs, tol_rel);
-    dbg_dumper.load_reference_log(reference_log_path);
 
     std::string input_path = data_dir + "/" + input_filename;
     std::vector<double> input_image = read_image(input_path);
@@ -169,12 +136,6 @@ int main(int argc, char* argv[])
 
     const std::string bias_path = weights_dir + "/conv1bn1-bias.bin";
     const std::string w_path = weights_dir + "/conv1bn1-ch0-k1.bin";
-    std::cout << "[STATS] bias_path=" << bias_path
-              << " text=" << (utils::is_text_file(bias_path) ? "yes" : "no")
-              << std::endl;
-    std::cout << "[STATS] w_path=" << w_path
-              << " text=" << (utils::is_text_file(w_path) ? "yes" : "no")
-              << std::endl;
     print_vector_stats("bias",
                        utils::read_values_from_file(bias_path, 0.90));
     print_vector_stats("w_ch0_k1",
@@ -242,12 +203,6 @@ int main(int argc, char* argv[])
         dbg_dumper.dump_ct("Initial layer convbn_initial/j0/masked (post)",
                            masked);
     }
-
-    std::filesystem::path report_path(diff_report_path);
-    if (!report_path.empty() && report_path.has_parent_path()) {
-        std::filesystem::create_directories(report_path.parent_path());
-    }
-    dbg_dumper.finalize(diff_report_path);
 
     return 0;
 }

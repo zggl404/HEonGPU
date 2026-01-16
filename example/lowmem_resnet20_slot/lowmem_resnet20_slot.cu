@@ -24,13 +24,6 @@ static std::string weights_dir;
 static std::string input_filename = "luis.png";
 static int verbose = 0;
 static bool plain = false;
-static int dbg = 1;
-static int dbg_count = 20;
-static std::string dbg_layer_regex;
-static std::string reference_log_path;
-static double tol_abs = 1e-2;
-static double tol_rel = 1e-2;
-static std::string diff_report_path = "output/diff_report.json";
 static DebugDumper dbg_dumper(&controller);
 
 static void parse_args(int argc, char* argv[])
@@ -47,20 +40,6 @@ static void parse_args(int argc, char* argv[])
             verbose = std::atoi(argv[++i]);
         } else if (arg == "--plain") {
             plain = true;
-        } else if (arg == "--dbg" && i + 1 < argc) {
-            dbg = std::atoi(argv[++i]);
-        } else if (arg == "--dbg_count" && i + 1 < argc) {
-            dbg_count = std::atoi(argv[++i]);
-        } else if (arg == "--dbg_layer_regex" && i + 1 < argc) {
-            dbg_layer_regex = argv[++i];
-        } else if (arg == "--reference_log" && i + 1 < argc) {
-            reference_log_path = argv[++i];
-        } else if (arg == "--tol_abs" && i + 1 < argc) {
-            tol_abs = std::atof(argv[++i]);
-        } else if (arg == "--tol_rel" && i + 1 < argc) {
-            tol_rel = std::atof(argv[++i]);
-        } else if (arg == "--diff_report" && i + 1 < argc) {
-            diff_report_path = argv[++i];
         }
     }
 }
@@ -560,11 +539,6 @@ static void execute_resnet20()
               << " rescale: " << controller.rescale_count
               << " boot: " << controller.boot_count << std::endl;
 
-    std::filesystem::path report_path(diff_report_path);
-    if (!report_path.empty() && report_path.has_parent_path()) {
-        std::filesystem::create_directories(report_path.parent_path());
-    }
-    dbg_dumper.finalize(diff_report_path);
 }
 
 int main(int argc, char* argv[])
@@ -597,10 +571,6 @@ int main(int argc, char* argv[])
     controller.weights_dir = weights_dir;
     controller.initialize(cfg);
     dbg_dumper.set_enabled(true);
-    dbg_dumper.set_count(dbg_count);
-    dbg_dumper.set_layer_regex(dbg_layer_regex);
-    dbg_dumper.set_tolerances(tol_abs, tol_rel);
-    dbg_dumper.load_reference_log(reference_log_path);
 
     execute_resnet20();
 
