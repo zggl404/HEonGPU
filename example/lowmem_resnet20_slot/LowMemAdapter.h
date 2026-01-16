@@ -1649,14 +1649,15 @@ class FHEController {
         if (plaintext_num_slots <= 0) {
             plaintext_num_slots = num_slots;
         }
+        size_t default_slot_num = 32768;
         std::vector<double> msg = vec;
         if (static_cast<int>(msg.size()) < plaintext_num_slots) {
             msg.resize(static_cast<size_t>(plaintext_num_slots), 0.0);
         }
-        if (plaintext_num_slots < num_slots &&
+        if (plaintext_num_slots < default_slot_num &&
             (num_slots % plaintext_num_slots == 0)) {
             std::vector<double> expanded(static_cast<size_t>(num_slots));
-            for (int i = 0; i < num_slots; ++i) {
+            for (int i = 0; i < default_slot_num; ++i) {
                 expanded[static_cast<size_t>(i)] =
                     msg[static_cast<size_t>(i % plaintext_num_slots)];
             }
