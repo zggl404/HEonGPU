@@ -496,7 +496,8 @@ static void execute_resnet20()
     controller.num_slots = 16384;
     Ctxt in = controller.encrypt(
         input_image,
-        controller.circuit_depth -1,
+        controller.circuit_depth - 1 -
+            utils::get_relu_depth(controller.relu_degree),
         16384);
     dbg_dumper.dump_ct("Layer0/input encrypted (pre-initial_layer)", in);
 
