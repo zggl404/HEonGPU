@@ -1649,13 +1649,29 @@ class FHEController {
         if (plaintext_num_slots <= 0) {
             plaintext_num_slots = num_slots;
         }
-        std::vector<double> msg = vec;
-        if (static_cast<int>(msg.size()) < plaintext_num_slots) {
-            msg.resize(static_cast<size_t>(plaintext_num_slots), 0.0);
+        const int actual_slots =
+            static_cast<int>(context_.get_poly_modulus_degree() / 2);
+        const int target_slots =
+            (plaintext_num_slots > 0) ? plaintext_num_slots : num_slots;
+        std::vector<double> msg;
+        if (target_slots < actual_slots &&
+            actual_slots % target_slots == 0) {
+            msg.resize(static_cast<size_t>(actual_slots), 0.0);
+            if (!vec.empty()) {
+                for (int i = 0; i < actual_slots; ++i) {
+                    msg[static_cast<size_t>(i)] =
+                        vec[static_cast<size_t>(i % target_slots)];
+                }
+            }
+        } else {
+            msg = vec;
+            if (static_cast<int>(msg.size()) < target_slots) {
+                msg.resize(static_cast<size_t>(target_slots), 0.0);
+            }
         }
         if (debug_cuda && debug_encode) {
             std::cout << "encode_full scale=" << scale
-                      << " slots=" << plaintext_num_slots
+                      << " slots=" << target_slots
                       << " msg_size=" << msg.size() << std::endl;
         }
         Ptxt plain(context_);
