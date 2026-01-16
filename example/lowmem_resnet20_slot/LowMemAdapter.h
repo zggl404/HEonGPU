@@ -396,10 +396,20 @@ class FHEController {
 
     Ctxt rotate_vector(const Ctxt& c, int steps)
     {
+        const int actual_slots =
+            static_cast<int>(context_.get_poly_modulus_degree() / 2);
+        int adj_steps = steps;
+        if (num_slots > 0 && num_slots != actual_slots &&
+            actual_slots % num_slots == 0) {
+            const int offset = actual_slots - num_slots;
+            if (offset == num_slots) {
+                adj_steps = steps + ((steps >= 0) ? offset : -offset);
+            }
+        }
         Ctxt out(context_);
         try {
             operators_->rotate_rows(const_cast<Ctxt&>(c), out, *galois_key_,
-                                    -steps);
+                                    -adj_steps);
         } catch (const std::exception& ex) {
             report_exception("rotate", ex);
             throw;
@@ -1585,7 +1595,18 @@ class FHEController {
             12288, -12288, 24576, -24576
         };
 
-        return shifts;
+        const int actual_slots =
+            static_cast<int>(context_.get_poly_modulus_degree() / 2);
+        const int half_slots = actual_slots / 2;
+        if (half_slots > 0) {
+            const size_t base_size = shifts.size();
+            shifts.reserve(base_size * 2);
+            for (size_t i = 0; i < base_size; ++i) {
+                const int s = shifts[i];
+                shifts.push_back(s + half_slots);
+            }
+        }
+        return unique_sorted(shifts);
     }
 
     Ptxt encode_full(const std::vector<double>& vec, int plaintext_num_slots)
