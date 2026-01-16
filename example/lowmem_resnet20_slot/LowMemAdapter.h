@@ -628,7 +628,7 @@ class FHEController {
 
             Ctxt res = add(sum, rotate_vector(sum, 1024));
             res = add(res, rotate_vector(rotate_vector(sum, 1024), 1024));
-            res = mult_mask(res, mask_from_to(0, 1024, res.depth()));
+            res = mult(res, mask_from_to(0, 1024, res.depth()));
 
             if (!init) {
                 finalsum = rotate_vector(res, 1024);
@@ -637,6 +637,7 @@ class FHEController {
                 finalsum = add(finalsum, res);
                 finalsum = rotate_vector(finalsum, 1024);
             }
+            
         }
 
         if (debug_cuda) {
@@ -1195,25 +1196,24 @@ class FHEController {
     {
         num_slots = 16384 * 2;
 
-        Ctxt fullpack = add(mult_mask(c1, mask_first_n(16384, c1.depth())),
-                            mult_mask(c2, mask_second_n(16384, c2.depth())));
+        Ctxt fullpack = add(mult(c1, mask_first_n(16384, c1.depth())),
+                            mult(c2, mask_second_n(16384, c2.depth())));
 
-        fullpack = mult_mask(
+        fullpack = mult(
             add(fullpack, rotate_vector(fullpack, 1)),
             gen_mask(2, fullpack.depth()));
-        fullpack = mult_mask(
+        fullpack = mult(
             add(fullpack, rotate_vector(rotate_vector(fullpack, 1), 1)),
             gen_mask(4, fullpack.depth()));
-        fullpack = mult_mask(add(fullpack, rotate_vector(fullpack, 4)),
-                             gen_mask(8, fullpack.depth()));
+        fullpack = mult(add(fullpack, rotate_vector(fullpack, 4)),
+                        gen_mask(8, fullpack.depth()));
         fullpack = add(fullpack, rotate_vector(fullpack, 8));
 
         Ctxt downsampledrows = encrypt({0}, c1.depth());
 
         for (int i = 0; i < 16; i++) {
-            Ctxt masked = mult_mask(fullpack,
-                                    mask_first_n_mod(16, 1024, i,
-                                                     fullpack.depth()));
+            Ctxt masked = mult(fullpack,
+                               mask_first_n_mod(16, 1024, i, fullpack.depth()));
             downsampledrows = add(downsampledrows, masked);
             if (i < 15) {
                 fullpack = rotate_vector(fullpack, 64 - 16);
@@ -1223,8 +1223,7 @@ class FHEController {
         Ctxt downsampledchannels = encrypt({0}, c1.depth());
         for (int i = 0; i < 32; i++) {
             Ctxt masked =
-                mult_mask(downsampledrows,
-                          mask_channel(i, downsampledrows.depth()));
+                mult(downsampledrows, mask_channel(i, downsampledrows.depth()));
             downsampledchannels = add(downsampledchannels, masked);
             downsampledchannels =
                 rotate_vector(downsampledchannels, -(1024 - 256));
@@ -1245,13 +1244,13 @@ class FHEController {
     Ctxt downsample256to64(const Ctxt& c1, const Ctxt& c2)
     {
         num_slots = 8192 * 2;
-        Ctxt fullpack = add(mult_mask(c1, mask_first_n(8192, c1.depth())),
-                            mult_mask(c2, mask_second_n(8192, c2.depth())));
+        Ctxt fullpack = add(mult(c1, mask_first_n(8192, c1.depth())),
+                            mult(c2, mask_second_n(8192, c2.depth())));
 
-        fullpack = mult_mask(
+        fullpack = mult(
             add(fullpack, rotate_vector(fullpack, 1)),
             gen_mask(2, fullpack.depth()));
-        fullpack = mult_mask(
+        fullpack = mult(
             add(fullpack, rotate_vector(rotate_vector(fullpack, 1), 1)),
             gen_mask(4, fullpack.depth()));
         fullpack = add(fullpack, rotate_vector(fullpack, 4));
@@ -1259,9 +1258,8 @@ class FHEController {
         Ctxt downsampledrows = encrypt({0}, c1.depth());
 
         for (int i = 0; i < 32; i++) {
-            Ctxt masked = mult_mask(fullpack,
-                                    mask_first_n_mod2(8, 256, i,
-                                                      fullpack.depth()));
+            Ctxt masked = mult(fullpack,
+                               mask_first_n_mod2(8, 256, i, fullpack.depth()));
             downsampledrows = add(downsampledrows, masked);
             if (i < 31) {
                 fullpack = rotate_vector(fullpack, 32 - 8);
@@ -1270,9 +1268,8 @@ class FHEController {
 
         Ctxt downsampledchannels = encrypt({0}, c1.depth());
         for (int i = 0; i < 64; i++) {
-            Ctxt masked =
-                mult_mask(downsampledrows,
-                          mask_channel_2(i, downsampledrows.depth()));
+            Ctxt masked = mult(downsampledrows,
+                               mask_channel_2(i, downsampledrows.depth()));
             downsampledchannels = add(downsampledchannels, masked);
             downsampledchannels =
                 rotate_vector(downsampledchannels, -(256 - 64));
