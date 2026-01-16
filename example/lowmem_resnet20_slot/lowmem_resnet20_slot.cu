@@ -24,6 +24,7 @@ static std::string weights_dir;
 static std::string input_filename = "luis.png";
 static int verbose = 0;
 static bool plain = false;
+static int dbg = 1;
 static std::string dbg_filter;
 static DebugDumper dbg_dumper(&controller);
 
@@ -41,6 +42,8 @@ static void parse_args(int argc, char* argv[])
             verbose = std::atoi(argv[++i]);
         } else if (arg == "--plain") {
             plain = true;
+        } else if (arg == "--dbg" && i + 1 < argc) {
+            dbg = std::atoi(argv[++i]);
         } else if (arg == "--dbg_filter" && i + 1 < argc) {
             dbg_filter = argv[++i];
         }
@@ -573,7 +576,7 @@ int main(int argc, char* argv[])
     cfg.relu_degree = controller.relu_degree;
     controller.weights_dir = weights_dir;
     controller.initialize(cfg);
-    dbg_dumper.set_enabled(true);
+    dbg_dumper.set_enabled(dbg != 0);
     dbg_dumper.set_layer_regex(dbg_filter);
 
     execute_resnet20();
