@@ -577,8 +577,6 @@ int main(int argc, char* argv[])
     controller.weights_dir = weights_dir;
     controller.initialize(cfg);
     dbg_dumper.set_enabled(dbg != 0);
-    dbg_dumper.set_layer_regex(dbg_filter);
-
     execute_resnet20();
 
     return 0;
